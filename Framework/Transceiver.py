@@ -1,2 +1,0 @@
-class Transceiver:
-    pass

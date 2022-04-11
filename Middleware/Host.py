@@ -5,7 +5,7 @@ from scapy.packet import Raw
 from multiprocessing import Process
 import pickle
 import socket
-from Framework.Trigger import Trigger
+from Middleware.Trigger import Trigger
 
 
 # TODO implement IKE

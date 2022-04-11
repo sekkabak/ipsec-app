@@ -1,0 +1,12 @@
+{
+  "name": "ipsec-demonstration",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^18.0.2"
+  }
+}
