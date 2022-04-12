@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet">
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+  body {
+  background: #c0c0c0;
+  font-family: Courier new;
+  padding: 20px;
+}
+
+/* Header/Blog Title */
+.header {
+  padding: 30px;
+  font-size: 30px;
+  text-align: center;
+  font: inherit;
+  background: white;
+  border-radius: 25px;
+  border: 2px solid black;
+}
+
+/* Create two unequal columns that floats next to each other */
+/* Left column */
+.leftcolumn {
+  float: left;
+  width: 45%;
+  height: 500px;
+}
+
+.material-icons {
+  font-family: 'Material Icons';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 15px;  /* Preferred icon size */
+  display: inline-block;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  word-wrap: normal;
+  white-space: nowrap;
+  direction: ltr;
+
+  /* Support for all WebKit browsers. */
+  -webkit-font-smoothing: antialiased;
+  /* Support for Safari and Chrome. */
+  text-rendering: optimizeLegibility;
+
+  /* Support for Firefox. */
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Support for IE. */
+  font-feature-settings: 'liga';
+}
+
+
+/* Right column */
+.rightcolumn {
+  float: right;
+  width:45%;
+  padding-left: 20px;
+}
+
+/* Fake image */
+.fakeimg {
+  background-color: #aaa;
+  width: 100%;
+  padding: 20px;
+  border-radius: 25px;
+  border: 2px solid black;
+}
+
+/* Add a card effect for articles */
+.card {
+  background-color: white;
+  padding: 20px;
+  margin-top: 20px;
+   border-radius: 25px;
+   height: 500px;
+  border: 2px solid black;
+}
+
+/* Clear floats after the columns */
+.row:after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+/* Footer */
+.footer {
+  position: absolute;
+  bottom:0;
+  text-align: right;
+  font: inherit;
+  font-size: 12px;
+}
+
+/* Responsive layout - when the screen is less than 800px wide, make the two columns stack on top of each other instead of next to each other */
+@media screen and (max-width: 800px) {
+  .leftcolumn, .rightcolumn {
+    width: 100%;
+    padding: 0;
+  }
+}
+    </style>
+</head>
+<body>
+ <div class="header">
+  <h2>IPsec app</h2>
+</div>
+
+<div class="row">
+  <div class="leftcolumn">
+    <div class="card">
+      <h2>Messages</h2>
+
+      <div class="chat-list">
+				<ul class="tabs-container">
+					<li class="active">
+						<ul class="member-list">
+							<li><span class="status online"><i class="fa fa-circle-o"></i></span><span>Message </span></li>
+							<li><span class="status online"><i class="fa fa-circle-o"></i></span>Message</span></li>
+						</ul>
+					</li>
+					<li></li>
+					<li></li>
+				</ul>
+			</div>
+      <p>Place for messages..</p>
+      <input type="text" value="" placeholder="Message">
+      <input type="text" value="" placeholder="Destination">
+      <input type="button" value="Submit" class="send-btn">
+    </div>
+    </div>
+    <div class="rightcolumn">
+      <div class="card">
+      <h2>Files</h2>
+      <div class="fakeimg" style="height:200px;"><img src="https://i1.rgstatic.net/ii/profile.image/279448160096274-1443637041337_Q512/Andrzej-Stasiak-3.jpg" height="100px"></div>
+      <p>Choose file.</p>
+      <input type="file" value="" placeholder="Message">
+      <input type="text" value="" placeholder="Destination">
+      <input type="button" value="Submit" class="send-btn">
+        </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<footer class="footer">
+                <div class="container-fluid">
+                    <div class="copyright float-right">
+                        &copy;
+                        <script>
+                            document.write(new Date().getFullYear())</script>
+                        Wojskowa Akademia Techniczna <i class="material-icons">fingerprint</i> Weronika Buras, Cezary Bąk, Filip Andrejczyk
+                    </div>
+                </div>
+            </footer>
+
+</body>
+</html>
