@@ -25,7 +25,7 @@ function once_f(txt) {
 var python = require('child_process').spawn('./venv/Scripts/python.exe', ['./client.py']);
 python.stdout.on('data', function (data) {
     let txt = data.toString('utf8');
-    console.log("data: ", txt);
+    console.log("Middleware: ", txt);
     if (txt.includes("http://") && once == false) {
         once_f(txt);
     }
