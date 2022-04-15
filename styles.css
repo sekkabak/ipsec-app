@@ -1,3 +1,64 @@
 /* styles.css */
+.okno{
+    width: 700px;
+    height: 600px;
+}
+
+.chat-window
+{
+    border: 1px solid black;
+    border-radius: 3px;
+    width: 380px;
+    height: 200px;
+    margin-top: 10px;
+    margin-left: 10px;
+}
+
+.message
+{
+    border: 1px solid black;
+    border-radius: 3px;
+    width: 380px;
+    height: 20px;
+    margin-top: 2px;
+    margin-left: 10px;
+}
+.message-label
+{
+    margin-top: 10px;
+    margin-left: 10px;
+}
+.buttons
+{
+margin-top: 5px;
+margin-right: 10px;
+text-align: right;
+}
+.leftwindow
+{
+    width: 400px;
+    height: 400px;
+    border: 2px solid black;
+    border-right: none;
+}
+
+.rightwindow
+{
+    width: 400px;
+    height: 400px;
+    border-left: none;
+    border: 2px solid black;
+}
+
+.grid-item {
+    border: 1px solid black;
+    width: 400px;
+    height: 400px;
+}
+
+.grid-container {
+    display: grid;
+    grid-template-columns: auto auto;
+}
 
 /* Add styles here to customize the appearance of your app */
