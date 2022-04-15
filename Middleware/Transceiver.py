@@ -2,7 +2,7 @@ import pickle
 import socket
 import time
 from multiprocessing import Process, Manager, Queue
-from typing import Union
+from typing import Union, Optional
 
 from scapy.compat import raw
 from scapy.layers.inet import IP, TCP
@@ -90,11 +90,11 @@ class Transceiver:
                                                 map(int, mask.split(".")))]))
         self.__arp_table.append(ArpRecord(ip, mask, gateway))
 
-    def send(self, dst_host: Socket, message: bytes):
+    def send(self, sender: Socket, dst_host: Socket, message: bytes):
         tunnel = self.__has_tunnel_to_network(dst_host)
         if not tunnel:
             tunnel = self.__try_to_setup_tunnel(dst_host)
-        package = self.__encrypt_package(message, tunnel)
+        package = self.__encrypt_package(sender, message, tunnel)
         trace = self.__get_trace(tunnel.network_ip)
         self.__speaker_queue.put((trace, package))
 
@@ -102,13 +102,25 @@ class Transceiver:
         arp_record = next(arp_record for arp_record in self.__arp_table if arp_record.network_ip == dest_ip)
         return arp_record.reach_socket
 
-    def __encrypt_package(self, message: bytes, tunnel: Tunnel) -> bytes:
+    # TODO implementation dla UDP
+    def __encrypt_package(self, sender: Socket, message: bytes, tunnel: Tunnel) -> bytes:
         sa = SecurityAssociation(ESP, spi=tunnel.spi, crypt_algo=tunnel.crypt_algo, crypt_key=tunnel.crypt_key)
-        p = IP(src=self.__interface, dst=tunnel.dst_ip)
-        p /= TCP(sport=self.__listen_port, dport=tunnel.dst_port)
+        p = IP(src=sender.ip, dst=tunnel.dst_ip)
+        p /= TCP(sport=sender.port, dport=tunnel.dst_port)
         p /= Raw(pickle.dumps(message))
-        p = IP(raw(p))
-        return raw(sa.encrypt(p))
+        # e = IP(src=self.__interface, dst=tunnel.dst_ip)
+        e = IP(src=self.__interface, dst=tunnel.dst_ip)
+        e /= Raw(sa.encrypt(p))
+
+        res = sa.decrypt(e.payload)
+
+        # e = IP(src=self.__interface, dst=tunnel.dst_ip)
+        # e /= Raw(sa.encrypt(p))
+        return raw(e)
+
+    def __decrypt_packet(self, packet, tunnel: Tunnel):
+        sa = SecurityAssociation(ESP, spi=tunnel.spi, crypt_algo=tunnel.crypt_algo, crypt_key=tunnel.crypt_key)
+        return sa.decrypt(packet)
 
     def __try_to_setup_tunnel(self, dst_host: Socket) -> Tunnel:
         tunnel = Tunnel()
@@ -127,23 +139,38 @@ class Transceiver:
 
         return tunnel
 
-    def __has_tunnel_to_network(self, dst_host: Socket) -> Union[Tunnel, bool]:
+    def __has_tunnel_to_network(self, dst_host: Socket) -> Optional[Tunnel]:
         try:
             network = self.find_network(dst_host.ip)
             for tunnel in self.__tunnels:
                 if tunnel.network() == network:
                     return tunnel
+            # TODO debug
+            tunnel = self.__try_to_setup_tunnel(dst_host)
+            self.__tunnels.append(tunnel)
+            return tunnel
         except IndexError:
-            return False
+            return None
 
     def start(self):
         try:
             while True:
                 if not self.__listener_queue.empty():
-                    # TODO need to check if this packet is for you or you should pass it further
-                    # sa.decrypt(e)
                     message = self.__listener_queue.get()
-                    print(message)
+                    packet = IP(message)
+                    # check if packets is ment to be here
+                    if packet.dst == self.__interface:
+                        # check if tunnel exist for this source
+                        tunnel = self.__has_tunnel_to_network(Socket(packet.src, 0))
+                        if not tunnel:
+                            # unknown source
+                            pass
+                        else:
+                            payload = IP(packet.payload)
+                            data = self.__decrypt_packet(packet, tunnel)
+                            inner_packet = TCP(data)
+                            sckt: Socket = Socket(inner_packet.dst, inner_packet.dport)
+                            self.__speaker_queue.put((sckt, inner_packet))
         except KeyboardInterrupt:
             self.__speaker_process.kill()
             self.__listener_process.kill()
@@ -152,7 +179,7 @@ class Transceiver:
         try:
             while True:
                 time.sleep(delay)
-                self.send(sck, message)
+                self.send(Socket('0.0.0.0', 00000), sck, message)
         except KeyboardInterrupt:
             self.__speaker_process.kill()
             self.__listener_process.kill()
