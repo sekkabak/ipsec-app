@@ -5,54 +5,93 @@ from scapy.packet import Raw
 from multiprocessing import Process
 import pickle
 import socket
-from Middleware.Trigger import Trigger
+from Middleware.Socket import Socket
+
+import pickle
+import socket
+import time
+from multiprocessing import Process, Manager, Queue
+from typing import Union, Optional
+
+from scapy.compat import raw
+from scapy.layers.inet import IP, TCP
+from scapy.layers.ipsec import SecurityAssociation, ESP
+from scapy.packet import Raw
+
+from Middleware.StaticRouteRecord import StaticRouteRecord
+from Middleware.Socket import Socket
+from Middleware.Tunnel import Tunnel
 
 
 # TODO implement IKE
 # TODO szatkowanie pakietów w tym miejscu żeby bardziej przypominało to IPsec
 class Host:
-    __key: bytes
-    __crypto_algo: str = 'AES-CBC'
-    __spi: int
-    __src_ip: str
-    __src_port: int
-    __network_gateway: tuple[str, int]
-    __listener: Process
-    __send_trigger: Trigger
-    __recv_trigger: Trigger
+    __interface: str
+    __listen_port: int
+    __network_gateway: Socket
 
-    def __init__(self, key, network_gateway: tuple[str, int], src_port: int, spi: int = 0xdeadbeef):
-        self.__key = key
+    __manager: Manager
+    __listener_queue: "Queue[bytes]"
+    __listener_process: Process
+
+    def __init__(self, interface: str, listen_port: int, network_gateway: Socket):
+        self.__interface = interface
+        self.__listen_port = listen_port
         self.__network_gateway = network_gateway
-        self.__src_port = src_port
-        self.__spi = spi
 
-        self.__send_trigger = Trigger()
-        self.__recv_trigger = Trigger()
-        self.__send_trigger.subscribe(self.__sender_process)
+    def __start_listener(self):
+        self.__listener_process = Process(target=self.listener_function,
+                                          args=(self.__interface, self.__listen_port, self.__listener_queue,))
+        self.__listener_process.start()
 
     @staticmethod
-    def __sender_process(data):
+    def listener_function(interface: str, listen_port: int, qq: "Queue[bytes]"):
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        server_socket.bind((interface, listen_port))
+
+        while True:
+            message, address = server_socket.recvfrom(1024)
+            qq.put(message)
+
+    @staticmethod
+    def sender_process(data):
         """This method runs in thread"""
-        obj, dst, dst_port, src_port, spi, crypto_algo, key, network_gateway = data
+        obj, dst_ip, dst_port, src_ip, src_port, network_gateway_ip, network_gateway_port = data
 
         # socket initialization
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(network_gateway)
-        src_ip = s.getsockname()[0]
+        s.bind((src_ip, 0))
 
-        # encrypting packet
-        sa = SecurityAssociation(ESP, spi=spi, crypt_algo=crypto_algo, crypt_key=key)
-        p = IP(src=src_ip, dst=dst)
+        # creating encapsulated packet
+        p = IP(src=src_ip, dst=dst_ip)
         p /= TCP(sport=src_port, dport=dst_port)
         p /= Raw(pickle.dumps(obj))
-        p = IP(raw(p))
-        encrypted_packet = sa.encrypt(p)
 
         # sending encapsulated packet
-        s.sendall(raw(encrypted_packet))
+        s.sendto(raw(p), (network_gateway_ip, network_gateway_port))
         s.close()
 
     def send(self, data: any, dst: str, dst_port: int):
-        self.__send_trigger.run(
-            [data, dst, dst_port, self.__src_port, self.__spi, self.__crypto_algo, self.__key, self.__network_gateway])
+        param = (data,
+                 dst,
+                 dst_port,
+                 self.__interface,
+                 self.__listen_port,
+                 self.__network_gateway.ip,
+                 self.__network_gateway.port)
+        # self.__listener_process = Process(target=self.sender_process,
+        #                                   args=(param,))
+        # self.__listener_process.start()
+        self.sender_process(param)
+
+    def __listen_loop_operation(self):
+        if not self.__listener_queue.empty():
+            message = self.__listener_queue.get()
+            print(str(message))
+
+    def start(self):
+        try:
+            while True:
+                self.__listen_loop_operation()
+        except KeyboardInterrupt:
+            self.__listener_process.kill()

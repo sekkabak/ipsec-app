@@ -9,7 +9,7 @@ from scapy.layers.inet import IP, TCP
 from scapy.layers.ipsec import SecurityAssociation, ESP
 from scapy.packet import Raw
 
-from Middleware.ArpRecord import ArpRecord
+from Middleware.StaticRouteRecord import StaticRouteRecord
 from Middleware.Socket import Socket
 from Middleware.Tunnel import Tunnel
 
@@ -23,5 +23,6 @@ if __name__ == '__main__':
     e = IP(src='0.0.0.0', dst='9.9.9.9')
     e /= Raw(sa.encrypt(p))
 
-    res = sa.decrypt(e.payload)
+    res = sa.decrypt(IP(e.payload.load))
+
 

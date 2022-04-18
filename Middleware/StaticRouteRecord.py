@@ -1,7 +1,7 @@
 from Middleware.Socket import Socket
 
 
-class ArpRecord:
+class StaticRouteRecord:
     network_ip: str
     network_mask: str
     reach_socket: Socket

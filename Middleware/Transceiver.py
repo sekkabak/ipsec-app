@@ -9,23 +9,20 @@ from scapy.layers.inet import IP, TCP
 from scapy.layers.ipsec import SecurityAssociation, ESP
 from scapy.packet import Raw
 
-from Middleware.ArpRecord import ArpRecord
+from Middleware.StaticRouteRecord import StaticRouteRecord
 from Middleware.Socket import Socket
 from Middleware.Tunnel import Tunnel
+from Middleware.DHE import DHE
 
 
 class Transceiver:
-    """
-    This will contain network IP with MASK and gateway as (IP,PORT) to determinate target
-    """
     __interface: str
     __listen_port: int
     __speaker_port: int
-    __arp_table: list[ArpRecord]  # (ip, mask, gateway)
-    # __local_network_database: list
+    __ike_port: int = 500
+    __static_routes_table: list[StaticRouteRecord]  # (ip, mask, gateway)
     __tunnels: list[Tunnel]
 
-    __manager: Manager
     __listener_queue: "Queue[bytes]"
     __speaker_queue: "Queue[tuple[Socket, bytes]]"
 
@@ -36,14 +33,15 @@ class Transceiver:
         self.__interface = interface
         self.__listen_port = listen_port
         self.__speaker_port = speaker_port
-        self.__arp_table = []
+        self.__static_routes_table = []
         self.__tunnels = []
 
-        self.__manager = Manager()
+        self.__listener_queue = Queue()
         self.__listener_queue = Queue()
         self.__speaker_queue = Queue()
         self.__start_listener()
         self.__start_speaker()
+        self.__start_ike()
 
     def __start_listener(self):
         self.__listener_process = Process(target=self.listener_function,
@@ -58,6 +56,30 @@ class Transceiver:
         while True:
             message, address = server_socket.recvfrom(1024)
             qq.put(message)
+
+    def __start_ike(self):
+        self.__listener_process = Process(target=self.ike_function,
+                                          args=(self.__interface, self.__ike_port, self.__listener_queue,))
+        self.__listener_process.start()
+
+    @staticmethod
+    def ike_function(interface: str, listen_port: int, qq: "Queue[bytes]"):
+        pass
+        # server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # server_socket.bind((interface, listen_port))
+        #
+        # while True:
+        #     bob = DHE(14)
+        #     ss.sendto(str.encode('Working'), (HOST, PORT))
+        #     bob_pub_key = bob.getPublicKey()
+        #     bob_pub_key_bytes = bob_pub_key.to_bytes(math.ceil(bob_pub_key.bit_length() / 8), sys.byteorder,
+        #                                              signed=False)
+        #     # print(bob_pub_key_bytes)
+        #     ss.sendto(bob_pub_key_bytes, (HOST, PORT))
+        #     alice_pub_key_bytes = ss.recv(2048)
+        #     alice_pub_key = int.from_bytes(alice_pub_key_bytes, sys.byteorder, signed=False)
+        #     shared_key = bob.update(alice_pub_key)
+        #     print("Shared key: ", shared_key)
 
     def __start_speaker(self):
         self.__speaker_process = Process(target=self.speaker_function,
@@ -76,7 +98,7 @@ class Transceiver:
 
     def find_network(self, dest_ip: str) -> Socket:
         """This will return Transceiver (IP,PORT) for given IP"""
-        for ip, mask, gateway in self.__arp_table:
+        for ip, mask, gateway in self.__static_routes_table:
             output = ".".join(map(str, [i & m
                                         for i, m in zip(map(int, dest_ip.split(".")),
                                                         map(int, mask.split(".")))]))
@@ -84,14 +106,15 @@ class Transceiver:
                 return gateway
         raise IndexError("Cannot find network")
 
-    def add_to_arp(self, gateway: Socket, mask: str):
+    def add_to_static_routes(self, gateway: Socket, mask: str):
         ip = ".".join(map(str, [i & m
                                 for i, m in zip(map(int, gateway.ip.split(".")),
                                                 map(int, mask.split(".")))]))
-        self.__arp_table.append(ArpRecord(ip, mask, gateway))
+        self.__static_routes_table.append(StaticRouteRecord(ip, mask, gateway))
 
     def send(self, sender: Socket, dst_host: Socket, message: bytes):
         tunnel = self.__has_tunnel_to_network(dst_host)
+        # TODO not this way, it only supports 2 routers
         if not tunnel:
             tunnel = self.__try_to_setup_tunnel(dst_host)
         package = self.__encrypt_package(sender, message, tunnel)
@@ -99,8 +122,9 @@ class Transceiver:
         self.__speaker_queue.put((trace, package))
 
     def __get_trace(self, dest_ip: str) -> Socket:
-        arp_record = next(arp_record for arp_record in self.__arp_table if arp_record.network_ip == dest_ip)
-        return arp_record.reach_socket
+        static_route = next(
+            static_route for static_route in self.__static_routes_table if static_route.network_ip == dest_ip)
+        return static_route.reach_socket
 
     # TODO implementation dla UDP
     def __encrypt_package(self, sender: Socket, message: bytes, tunnel: Tunnel) -> bytes:
@@ -108,19 +132,14 @@ class Transceiver:
         p = IP(src=sender.ip, dst=tunnel.dst_ip)
         p /= TCP(sport=sender.port, dport=tunnel.dst_port)
         p /= Raw(pickle.dumps(message))
-        # e = IP(src=self.__interface, dst=tunnel.dst_ip)
+
         e = IP(src=self.__interface, dst=tunnel.dst_ip)
         e /= Raw(sa.encrypt(p))
-
-        res = sa.decrypt(e.payload)
-
-        # e = IP(src=self.__interface, dst=tunnel.dst_ip)
-        # e /= Raw(sa.encrypt(p))
         return raw(e)
 
-    def __decrypt_packet(self, packet, tunnel: Tunnel):
+    def __decrypt_packet(self, packet: bytes, tunnel: Tunnel):
         sa = SecurityAssociation(ESP, spi=tunnel.spi, crypt_algo=tunnel.crypt_algo, crypt_key=tunnel.crypt_key)
-        return sa.decrypt(packet)
+        return sa.decrypt(IP(packet))
 
     def __try_to_setup_tunnel(self, dst_host: Socket) -> Tunnel:
         tunnel = Tunnel()
@@ -141,6 +160,7 @@ class Transceiver:
 
     def __has_tunnel_to_network(self, dst_host: Socket) -> Optional[Tunnel]:
         try:
+            # TODO search for tunnel by SPI
             network = self.find_network(dst_host.ip)
             for tunnel in self.__tunnels:
                 if tunnel.network() == network:
@@ -152,25 +172,62 @@ class Transceiver:
         except IndexError:
             return None
 
+    def __scapy_get_layers(self, packet):
+        layers = []
+        counter = 0
+        while True:
+            layer = packet.getlayer(counter)
+            if layer is None:
+                break
+            layers.append(layer)
+            counter += 1
+        return layers
+
+    def __handle_network_inbound_TCP_traffic(self, message: bytes):
+        packet = IP(message)
+        # TODO
+
+    def __handle_network_inbound_UDP_traffic(self, message: bytes):
+        pass
+
+    def __handle_network_outbound_traffic(self, message: bytes):
+        packet = IP(message)
+
+        # check if packets is ment to be here
+        if packet.dst == self.__interface:
+            # TODO implement normal traffic
+            # check if tunnel exist for this source
+            tunnel = self.__has_tunnel_to_network(Socket(packet.src, 0))
+            if not tunnel:
+                # unknown source
+                # ignore
+                pass
+            else:
+                data = self.__decrypt_packet(packet.payload.load, tunnel)
+                inner_packet: IP = data
+                sckt: Socket = Socket(inner_packet.dst, inner_packet.dport)
+                self.__speaker_queue.put((sckt, inner_packet.payload.load))
+
+    def __listen_loop_operation(self):
+        if not self.__listener_queue.empty():
+            message = self.__listener_queue.get()
+            try:
+                layers = self.__scapy_get_layers(IP(message))
+                layers_names = [x.name for x in layers]
+
+                if layers_names == ['IP', 'TCP', 'Raw']:
+                    self.__handle_network_inbound_TCP_traffic(message)
+                if layers_names == ['IP', 'UDP', 'Raw']:
+                    self.__handle_network_inbound_UDP_traffic(message)
+                elif layers_names == ['IP', 'Raw']:
+                    self.__handle_network_outbound_traffic(message)
+            except:
+                pass
+
     def start(self):
         try:
             while True:
-                if not self.__listener_queue.empty():
-                    message = self.__listener_queue.get()
-                    packet = IP(message)
-                    # check if packets is ment to be here
-                    if packet.dst == self.__interface:
-                        # check if tunnel exist for this source
-                        tunnel = self.__has_tunnel_to_network(Socket(packet.src, 0))
-                        if not tunnel:
-                            # unknown source
-                            pass
-                        else:
-                            payload = IP(packet.payload)
-                            data = self.__decrypt_packet(packet, tunnel)
-                            inner_packet = TCP(data)
-                            sckt: Socket = Socket(inner_packet.dst, inner_packet.dport)
-                            self.__speaker_queue.put((sckt, inner_packet))
+                self.__listen_loop_operation()
         except KeyboardInterrupt:
             self.__speaker_process.kill()
             self.__listener_process.kill()
