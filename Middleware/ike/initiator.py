@@ -5,6 +5,9 @@
 #
 
 import logging
+import sys
+import time
+
 import asyncio
 import os
 
@@ -59,10 +62,10 @@ class IKEInitiator(asyncio.DatagramProtocol):
         logger.info("No one listening")
 
 
-def main(peer):
+def main(localaddress, peer):
     port = 500
     loop = asyncio.get_event_loop()
-    t = asyncio.Task(loop.create_datagram_endpoint(IKEInitiator, remote_addr=(peer, port)))
+    t = asyncio.Task(loop.create_datagram_endpoint(IKEInitiator, remote_addr=(peer, port), local_addr=(localaddress, port)))
     # TODO: Retransmissions should be handled here?
     loop.run_until_complete(t)
     loop.run_forever()
@@ -72,3 +75,4 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(name)s.%(funcName)s:[%(lineno)s]: %(message)s')
     logger = logging.getLogger('MAIN')
     logger.info("Starting...")
+    main(sys.argv[1], sys.argv[2])

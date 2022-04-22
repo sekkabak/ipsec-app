@@ -137,6 +137,10 @@ class IKE(object):
         """
         assert len(self.packets) == 2
         packet = self.packets[-1]
+        if len(packet.payloads) == 0:
+            packet = self.packets[0]
+
+        self.iSPI = packet.payloads[0].spi
         for p in packet.payloads:
             if p._type == payloads.Type.Nr:
                 self.Nr = p._data
@@ -182,7 +186,7 @@ class IKE(object):
         assert auth_type == const.AuthenticationType.RSA
         logger.debug(dump(auth_data))
         try:
-            return pubkey.verify(signed_octets, auth_data[4:], 'tests/peer.pem')
+            return pubkey.verify(signed_octets, auth_data[4:], os.path.dirname(os.path.abspath(__file__)) + '/../../config/peer.pem')
         except pubkey.VerifyError:
             raise IkeError("Remote peer authentication failed.")
 
@@ -325,7 +329,11 @@ class IKE(object):
         (packet.iSPI, packet.rSPI, next_payload, packet.version, exchange_type, packet.flags,
          packet.message_id, packet.length) = const.IKE_HEADER.unpack(packet.header)
         packet.exchange_type = const.ExchangeType(exchange_type)
-        if self.iSPI != packet.iSPI:
+        if packet.exchange_type == const.ExchangeType.IKE_SA_INIT:
+            logger.debug("Packed parsed successfully")
+            self.packets.append(packet)
+            return packet
+        elif self.iSPI != packet.iSPI:
             raise IkeError("Initiator SPI mismatch, packet to an unknown IKE SA")
         elif not self.rSPI:
             logger.debug("Setting responder SPI: {0:x}".format(packet.rSPI))

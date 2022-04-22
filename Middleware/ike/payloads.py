@@ -21,7 +21,7 @@ from .proposal import Proposal
 from .util.conv import to_bytes
 
 
-PRIVATE_KEY_PEM = 'tests/private_key.pem'
+PRIVATE_KEY_PEM = os.path.dirname(os.path.abspath(__file__)) + '/../../config/private_key.pem'
 
 __author__ = 'kimvais'
 

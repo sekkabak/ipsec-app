@@ -12,7 +12,6 @@ from scapy.packet import Raw
 from Middleware.StaticRouteRecord import StaticRouteRecord
 from Middleware.Socket import Socket
 from Middleware.Tunnel import Tunnel
-from Middleware.DHE import DHE
 
 
 class Transceiver:
