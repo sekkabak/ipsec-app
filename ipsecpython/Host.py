@@ -5,7 +5,7 @@ from scapy.packet import Raw
 from multiprocessing import Process
 import pickle
 import socket
-from Middleware.Socket import Socket
+from Socket import Socket
 
 import pickle
 import socket
@@ -18,9 +18,9 @@ from scapy.layers.inet import IP, TCP
 from scapy.layers.ipsec import SecurityAssociation, ESP
 from scapy.packet import Raw
 
-from Middleware.StaticRouteRecord import StaticRouteRecord
-from Middleware.Socket import Socket
-from Middleware.Tunnel import Tunnel
+from StaticRouteRecord import StaticRouteRecord
+from Socket import Socket
+from Tunnel import Tunnel
 
 
 # TODO implement IKE

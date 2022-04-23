@@ -4,7 +4,6 @@ import socket
 import sys
 from time import sleep
 
-from Middleware.DHE import DHE
 from threading import Thread
 
 

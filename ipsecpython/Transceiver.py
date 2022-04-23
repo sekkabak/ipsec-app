@@ -9,9 +9,9 @@ from scapy.layers.inet import IP, TCP
 from scapy.layers.ipsec import SecurityAssociation, ESP
 from scapy.packet import Raw
 
-from Middleware.StaticRouteRecord import StaticRouteRecord
-from Middleware.Socket import Socket
-from Middleware.Tunnel import Tunnel
+from StaticRouteRecord import StaticRouteRecord
+from Socket import Socket
+from Tunnel import Tunnel
 
 
 class Transceiver:

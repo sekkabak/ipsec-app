@@ -1,5 +1,5 @@
-from Middleware.Socket import Socket
-from Middleware.Transceiver import Transceiver
+from Socket import Socket
+from Transceiver import Transceiver
 
 # router 1
 if __name__ == '__main__':

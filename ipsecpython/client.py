@@ -1,7 +1,7 @@
 import socket
 from flask import Flask
 from gevent.pywsgi import WSGIServer
-from Middleware.Host import Host
+from Host import Host
 
 app = Flask(__name__)
 local_ip = '127.0.0.1'

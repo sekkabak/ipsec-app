@@ -1,4 +1,4 @@
-from Middleware.Socket import Socket
+from Socket import Socket
 
 
 class Tunnel:
