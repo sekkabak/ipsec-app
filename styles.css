@@ -4,7 +4,8 @@
     height: 600px;
 }
 
-.chat-window
+.chat-window-1,
+.chat-window-2
 {
     border: 1px solid black;
     border-radius: 3px;
@@ -19,7 +20,7 @@
     border: 1px solid black;
     border-radius: 3px;
     width: 380px;
-    height: 20px;
+    height: 26px;
     margin-top: 2px;
     margin-left: 10px;
 }
@@ -59,6 +60,19 @@ text-align: right;
 .grid-container {
     display: grid;
     grid-template-columns: auto auto;
+}
+
+.my-message{
+    text-align: right;
+    border: 2px solid #dedede;
+    background-color: #f1f1f1;
+    border-radius: 5px;
+    padding: 5px;
+}
+.other-message{
+    text-align: left;
+    border-color: #ccc;
+    background-color: #ddd
 }
 
 /* Add styles here to customize the appearance of your app */
