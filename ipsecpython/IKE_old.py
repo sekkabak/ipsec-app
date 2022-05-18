@@ -23,7 +23,7 @@ from DiffieHellman import DiffieHellman, to_bytes
 
 import logging
 logger = logging.getLogger("ike")
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 class IKE:
     __ike_port: int = 500
@@ -83,7 +83,21 @@ class IKE:
                         sessions[address[0]] = sess
                     elif sess[0] == 3:
                         # IKE fase
-                        
+                        tunnel = Tunnel()
+                        network = self.find_network(dst_host.ip)
+                        if not network:
+                            raise Exception("Cannot reach that network")
+                        tunnel.network_ip = network.ip
+                        tunnel.network_port = network.port
+                        tunnel.dst_ip = dst_host.ip
+                        tunnel.dst_port = dst_host.port
+
+                        # TODO add Diffie-Hellman
+                        tunnel.crypt_algo = 'AES-CBC'
+                        tunnel.spi = 0xdeadbeef
+                        tunnel.crypt_key = b'aaaaaaaaaaaaaaaa'
+
+                        pass
                 else:
                     if message == b'DH init':
                         sessions[address[0]] = [1,]

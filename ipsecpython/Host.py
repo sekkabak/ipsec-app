@@ -22,9 +22,11 @@ from StaticRouteRecord import StaticRouteRecord
 from Socket import Socket
 from Tunnel import Tunnel
 
+import logging
+logger = logging.getLogger("router")
+logger.setLevel(logging.DEBUG)
 
-# TODO implement IKE
-# TODO szatkowanie pakietów w tym miejscu żeby bardziej przypominało to IPsec
+
 class Host:
     __interface: str
     __listen_port: int
@@ -38,14 +40,17 @@ class Host:
         self.__interface = interface
         self.__listen_port = listen_port
         self.__network_gateway = network_gateway
+        
+        self.__listener_queue = Queue()
+        self.__speaker_queue = Queue()
 
     def __start_listener(self):
-        self.__listener_process = Process(target=self.listener_function,
+        self.__listener_process = Process(target=self.__listener_function,
                                           args=(self.__interface, self.__listen_port, self.__listener_queue,))
         self.__listener_process.start()
 
     @staticmethod
-    def listener_function(interface: str, listen_port: int, qq: "Queue[bytes]"):
+    def __listener_function(interface: str, listen_port: int, qq: "Queue[bytes]"):
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         server_socket.bind((interface, listen_port))
 
@@ -65,7 +70,8 @@ class Host:
         # creating encapsulated packet
         p = IP(src=src_ip, dst=dst_ip)
         p /= TCP(sport=src_port, dport=dst_port)
-        p /= Raw(pickle.dumps(obj))
+        p /= Raw(obj.encode("utf-8"))
+        # p /= Raw(pickle.dumps(obj))
 
         # sending encapsulated packet
         s.sendto(raw(p), (network_gateway_ip, network_gateway_port))
@@ -79,19 +85,27 @@ class Host:
                  self.__listen_port,
                  self.__network_gateway.ip,
                  self.__network_gateway.port)
-        # self.__listener_process = Process(target=self.sender_process,
-        #                                   args=(param,))
-        # self.__listener_process.start()
         self.sender_process(param)
 
     def __listen_loop_operation(self):
         if not self.__listener_queue.empty():
             message = self.__listener_queue.get()
-            print(str(message))
+            packet = IP(message)
+            data = pickle.loads(packet[Raw].load)
+            logger.error(f"From {packet.src} came data: {data}")
+        # else:
+        #     logger.error(f"nothing")
+
+    def stop_host(self):
+        print("host is turning off")
+        self.__listener_process.kill()
+        exit()
 
     def start(self):
+        self.__start_listener()
+        
         try:
             while True:
                 self.__listen_loop_operation()
         except KeyboardInterrupt:
-            self.__listener_process.kill()
+            self.stop_host(self)

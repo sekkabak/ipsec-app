@@ -2,6 +2,7 @@ import errno
 import fcntl
 import os
 import pickle
+from pyexpat.errors import messages
 import socket
 import sys
 import time
@@ -12,16 +13,21 @@ from scapy.compat import raw
 from scapy.layers.inet import IP, TCP
 from scapy.layers.ipsec import SecurityAssociation, ESP
 from scapy.packet import Raw
-from IKE import IKE
+
+from IKE_old import IKE
+# import IKE
 
 from StaticRouteRecord import StaticRouteRecord
 from Socket import Socket
 from Tunnel import Tunnel
 from DiffieHellman import DiffieHellman
 
+import asyncio
+
 import logging
 logger = logging.getLogger("router")
 logger.setLevel(logging.DEBUG)
+
 
 class Router:
     __interface: str
@@ -79,6 +85,7 @@ class Router:
             if not qq.empty():
                 # example data (("127.0.0.1",7070), "test")
                 address, data = qq.get()
+                # logger.error(f"{data} {address.totuple()}")
                 server_socket.sendto(data, address.totuple())
 
     def find_network(self, dest_ip: str) -> Socket:
@@ -97,14 +104,14 @@ class Router:
                                                 map(int, mask.split(".")))]))
         self.__static_routes_table.append(StaticRouteRecord(ip, mask, gateway))
 
-    def send(self, sender: Socket, dst_host: Socket, message: bytes):
-        tunnel = self.__has_tunnel_to_network(dst_host)
-        # TODO not this way, it only supports 2 routers
-        if not tunnel:
-            tunnel = self.__try_to_setup_tunnel(dst_host)
-        package = self.__encrypt_package(sender, message, tunnel)
-        trace = self.__get_trace(tunnel.network_ip)
-        self.__speaker_queue.put((trace.totuple(), package))
+    # def send(self, sender: Socket, dst_host: Socket, message: bytes):
+    #     tunnel = self.__has_tunnel(dst_host)
+    #     # TODO not this way, it only supports 2 routers
+    #     if not tunnel:
+    #         tunnel = self.__try_to_setup_tunnel(dst_host)
+    #     package = self.__encrypt_package(sender, message, tunnel)
+    #     trace = self.__get_trace(tunnel.network_ip)
+    #     self.__speaker_queue.put((trace.totuple(), package))
 
     def __get_trace(self, dest_ip: str) -> Socket:
         static_route = next(
@@ -112,10 +119,20 @@ class Router:
         return static_route.reach_socket
 
     # TODO implementation dla UDP
-    def __encrypt_package(self, sender: Socket, message: bytes, tunnel: Tunnel) -> bytes:
+    def __encrypt_package_TCP(self, sender: Socket, destination: Socket, message: bytes, tunnel: Tunnel) -> bytes:
         sa = SecurityAssociation(ESP, spi=tunnel.spi, crypt_algo=tunnel.crypt_algo, crypt_key=tunnel.crypt_key)
-        p = IP(src=sender.ip, dst=tunnel.dst_ip)
-        p /= TCP(sport=sender.port, dport=tunnel.dst_port)
+        p = IP(src=sender.ip, dst=destination.ip)
+        p /= TCP(sport=sender.port, dport=destination.port)
+        p /= Raw(pickle.dumps(message))
+
+        e = IP(src=self.__interface, dst=tunnel.dst_ip)
+        e /= Raw(sa.encrypt(p))
+        return raw(e)
+    
+    def __encrypt_package_UDP(self, sender: Socket, destination: Socket, message: bytes, tunnel: Tunnel) -> bytes:
+        sa = SecurityAssociation(ESP, spi=tunnel.spi, crypt_algo=tunnel.crypt_algo, crypt_key=tunnel.crypt_key)
+        p = IP(src=sender.ip, dst=destination.ip)
+        p /= TCP(sport=sender.port, dport=destination.port)
         p /= Raw(pickle.dumps(message))
 
         e = IP(src=self.__interface, dst=tunnel.dst_ip)
@@ -126,34 +143,32 @@ class Router:
         sa = SecurityAssociation(ESP, spi=tunnel.spi, crypt_algo=tunnel.crypt_algo, crypt_key=tunnel.crypt_key)
         return sa.decrypt(IP(packet))
 
-    def __try_to_setup_tunnel(self, dst_host: Socket) -> Tunnel:
-        tunnel = Tunnel()
-        network = self.find_network(dst_host.ip)
-        if not network:
-            raise Exception("Cannot reach that network")
-        tunnel.network_ip = network.ip
-        tunnel.network_port = network.port
-        tunnel.dst_ip = dst_host.ip
-        tunnel.dst_port = dst_host.port
+    def receive_estabilished_tunnel(self, tunnel: Tunnel):
+        self.__tunnels.append(tunnel)
 
-        # TODO add Diffie-Hellman
-        tunnel.crypt_algo = 'AES-CBC'
-        tunnel.spi = 0xdeadbeef
-        tunnel.crypt_key = b'aaaaaaaaaaaaaaaa'
+    # def __try_to_setup_tunnel(self, dst_host: Socket) -> Tunnel:
+    #     tunnel = Tunnel()
+    #     network = self.find_network(dst_host.ip)
+    #     if not network:
+    #         raise Exception("Cannot reach that network")
+    #     tunnel.network_ip = network.ip
+    #     tunnel.network_port = network.port
+    #     tunnel.dst_ip = dst_host.ip
+    #     tunnel.dst_port = dst_host.port
 
-        return tunnel
+    #     # TODO add Diffie-Hellman
+    #     tunnel.crypt_algo = 'AES-CBC'
+    #     tunnel.spi = 0xdeadbeef
+    #     tunnel.crypt_key = b'aaaaaaaaaaaaaaaa'
 
-    def __has_tunnel_to_network(self, dst_host: Socket) -> Optional[Tunnel]:
+    #     return tunnel
+
+    def __has_tunnel(self, spi: Socket) -> Optional[Tunnel]:
         try:
-            # TODO search for tunnel by SPI
-            network = self.find_network(dst_host.ip)
             for tunnel in self.__tunnels:
-                if tunnel.network() == network:
+                if tunnel.spi == spi:
                     return tunnel
-            # TODO debug
-            tunnel = self.__try_to_setup_tunnel(dst_host)
-            self.__tunnels.append(tunnel)
-            return tunnel
+            return None
         except IndexError:
             return None
 
@@ -170,44 +185,132 @@ class Router:
 
     def __handle_network_inbound_TCP_traffic(self, message: bytes):
         packet = IP(message)
-        # TODO
+        
+        # TODO debug
+        tunnel = Tunnel()
+        tunnel.crypt_algo = 'AES-CBC'
+        tunnel.spi = 0xdeadbeef
+        tunnel.crypt_key = b'aaaaaaaaaaaaaaaa'
+        tunnel.dst_ip = '127.0.0.13'
+        tunnel.dst_port = 10000
+        tunnel.network_ip = '127.0.0.13'
+        tunnel.network_port = 10000
+        self.__tunnels.append(tunnel)
+        
+        tunnel = self.__has_tunnel(0xdeadbeef)
+        if not tunnel:
+            logger.warning(f"no tunnel")
+            # unknown source
+            # ignore
+            pass
+        else:
+            import traceback
+            try:
+                sender = self.find_network(packet.src)
+                destination = Socket(packet.dst, packet.dport)
+                logger.error(f"Packet was encrypted from {sender.totuple()} to {destination.totuple()}")
+                package = self.__encrypt_package_TCP(sender, destination, packet.payload.load, tunnel)
+                trace = self.__get_trace(tunnel.network_ip)
+                self.__speaker_queue.put((trace, package))
+            except Exception as e:
+                logger.error(f"{traceback.print_exc()}")
+                logger.error(f"{e}")
 
     def __handle_network_inbound_UDP_traffic(self, message: bytes):
-        pass
+        packet = IP(message)
+        
+        # TODO debug
+        tunnel = Tunnel()
+        tunnel.crypt_algo = 'AES-CBC'
+        tunnel.spi = 0xdeadbeef
+        tunnel.crypt_key = b'aaaaaaaaaaaaaaaa'
+        tunnel.dst_ip = '127.0.0.13'
+        tunnel.dst_port = 10000
+        tunnel.network_ip = '127.0.0.13'
+        tunnel.network_port = 10000
+        self.__tunnels.append(tunnel)
+        
+        tunnel = self.__has_tunnel(0xdeadbeef)
+        if not tunnel:
+            logger.warning(f"no tunnel")
+            # unknown source
+            # ignore
+            pass
+        else:
+            import traceback
+            try:
+                sender = self.find_network(packet.src)
+                destination = Socket(packet.dst, packet.dport)
+                logger.error(f"Packet was encrypted from {sender.totuple()} to {destination.totuple()}")
+                package = self.__encrypt_package_UDP(sender, destination, packet.payload.load, tunnel)
+                trace = self.__get_trace(tunnel.network_ip)
+                self.__speaker_queue.put((trace, package))
+            except Exception as e:
+                logger.error(f"{traceback.print_exc()}")
+                logger.error(f"{e}")
 
     def __handle_network_outbound_traffic(self, message: bytes):
         packet = IP(message)
-
-        # check if packets is ment to be here
-        if packet.dst == self.__interface:
-            # TODO implement normal traffic
-            # check if tunnel exist for this source
-            tunnel = self.__has_tunnel_to_network(Socket(packet.src, 0))
-            if not tunnel:
-                # unknown source
-                # ignore
-                pass
-            else:
+        
+        # TODO debug
+        tunnel = Tunnel()
+        
+        tunnel.crypt_algo = 'AES-CBC'
+        tunnel.spi = 0xdeadbeef
+        tunnel.crypt_key = b'aaaaaaaaaaaaaaaa'
+        
+        tunnel.dst_ip = '127.0.0.13'
+        tunnel.dst_port = 10000
+        tunnel.network_ip = '127.0.0.13'
+        tunnel.network_port = 10000
+        self.__tunnels.append(tunnel)
+        
+        tunnel = self.__has_tunnel(0xdeadbeef)
+        if not tunnel:
+            logger.info(f"no tunnel")
+            # unknown source
+            # ignore
+            pass
+        else:
+            import traceback
+            try:
                 data = self.__decrypt_packet(packet.payload.load, tunnel)
                 inner_packet: IP = data
                 sckt: Socket = Socket(inner_packet.dst, inner_packet.dport)
-                self.__speaker_queue.put((sckt, inner_packet.payload.load))
+                logger.error(f"Packet was send to {sckt.totuple()}")
+                self.__speaker_queue.put((sckt, raw(data)))
+            except Exception as e:
+                logger.error(f"{traceback.print_exc()}")
+                logger.error(f"{e}")
 
-    # def __listen_loop_operation(self):
-    #     if not self.__listener_queue.empty():
-    #         message = self.__listener_queue.get()
-    #         try:
-    #             layers = self.__scapy_get_layers(IP(message))
-    #             layers_names = [x.name for x in layers]
-
-    #             if layers_names == ['IP', 'TCP', 'Raw']:
-    #                 self.__handle_network_inbound_TCP_traffic(message)
-    #             if layers_names == ['IP', 'UDP', 'Raw']:
-    #                 self.__handle_network_inbound_UDP_traffic(message)
-    #             elif layers_names == ['IP', 'Raw']:
-    #                 self.__handle_network_outbound_traffic(message)
-    #         except:
-    #             pass
+    def __listen_loop_operation(self):
+        if not self.__listener_queue.empty():
+            message = self.__listener_queue.get()
+            try:
+                packet = IP(message)
+                layers = self.__scapy_get_layers(packet)
+                layers_names = [x.name for x in layers]
+                logger.info(f"{layers_names}")
+                
+                if packet.dst == self.__interface and layers_names == ['IP', 'Raw']:
+                    logger.info(f"Outbound packet came")
+                    self.__handle_network_outbound_traffic(message)
+                elif layers_names == ['IP', 'TCP', 'Raw']:
+                    logger.info(f"Inbound TCP packet came")
+                    self.__handle_network_inbound_TCP_traffic(message)
+                elif layers_names == ['IP', 'UDP', 'Raw']:
+                    logger.info(f"Inbound UDP packet came")
+                    self.__handle_network_inbound_UDP_traffic(message)
+                    
+            except:
+                pass
+            
+    def do_stuff_periodically(self, interval, periodic_function):
+        while True:
+            # print("timer start")
+            # logger.error(f"test before loop")
+            # asyncio.sleep(interval)
+            periodic_function()
     
     def __print_help(self):
         print("Help options")
@@ -265,40 +368,56 @@ class Router:
         print(f"crypt_algo: {crypt_algo}")
         print(f"crypt_key: {crypt_key}")
         
-    def __program_loop(self):
-        print("Welcome in Router emulator shell")
-        print("type help for options")
-        
-        while True:
-            choice = input("$ ")
-            if choice in ('exit', 'quit'):
-                self.stop_router()
-            elif choice in ('help', 'h', '?'):
-                self.__print_help()
-            elif choice in ('status'):
+    async def __program_loop(self, loop):
+        try:
+            while True:
+                # logger.error(f"test")
+                # loop.create_task(greet_every_two_seconds())
+                
+                # asyncio.create_task(self.do_stuff_periodically(1, self.__listen_loop_operation))
+                # asyncio.ensure_future()
+                # loop.call_soon_threadsafe(asyncio.async, g())
+                # asyncio.create_task()
+                
                 self.__print_status()
-            elif choice in ('clear', "cls"):
-                self.__clear_console()
-            elif choice in ('traces', 'routes', 'route', 'trace'):
-                self.__list_of_traces()
-            elif choice in ('tunnels'):
-                self.__list_tunnels()
-            elif choice in ('tunnels_info'):
-                self.__list_tunnels_with_data()
-            elif 'create_tunnel' in choice:
-                x = choice.split()
-                if len(x) != 2:
-                    print("Command not found, type 'help' for options\n")
-                elif not self.__validate_ip(x[1]):
-                    print("Second parameter must be valid IP address\n")
-                else:
-                    self.__create_tunnel(x[1])
-            elif 'ping' in  choice:
-                # implement ping
-                pass
-            else:
-                print("Command not found, type 'help' for options\n")
-
+                # self.do_stuff_periodically(1, self.__listen_loop_operation)
+                
+                
+                print("Welcome in Router emulator shell")
+                print("type help for options")
+                
+                while True:
+                    choice = input("$ ")
+                    if choice in ('exit', 'quit'):
+                        self.stop_router()
+                    elif choice in ('help', 'h', '?'):
+                        self.__print_help()
+                    elif choice in ('status'):
+                        self.__print_status()
+                    elif choice in ('clear', "cls"):
+                        self.__clear_console()
+                    elif choice in ('traces', 'routes', 'route', 'trace'):
+                        self.__list_of_traces()
+                    elif choice in ('tunnels'):
+                        self.__list_tunnels()
+                    elif choice in ('tunnels_info'):
+                        self.__list_tunnels_with_data()
+                    elif 'create_tunnel' in choice:
+                        x = choice.split()
+                        if len(x) != 2:
+                            print("Command not found, type 'help' for options\n")
+                        elif not self.__validate_ip(x[1]):
+                            print("Second parameter must be valid IP address\n")
+                        else:
+                            self.__create_tunnel(x[1])
+                    elif 'ping' in  choice:
+                        # implement ping
+                        pass
+                    else:
+                        print("Command not found, type 'help' for options\n")
+        except KeyboardInterrupt:
+            self.stop_router()
+        
     def __validate_ip(self, s):
         a = s.split('.')
         if len(a) != 4:
@@ -319,12 +438,9 @@ class Router:
         exit()
 
     def start(self):
-        try:
-            while True:
-                self.__program_loop()                
-                # self.__listen_loop_operation()
-        except KeyboardInterrupt:
-            self.stop_router()
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(self.__program_loop(loop))
+        loop.close()
 
     def test(self, sck: Socket, message: bytes, delay: int = 5):
         try:
