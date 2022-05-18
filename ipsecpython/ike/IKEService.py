@@ -18,7 +18,7 @@ from . import payloads
 # from .util.cipher import Camellia
 # from . import const
 # from . import proposal
-from .dh import DiffieHellman
+from ..DiffieHellman import DiffieHellman
 from .prf import prf, prfplus
 
 logger = logging.getLogger('MAIN')
@@ -172,9 +172,9 @@ class IKE(object):
                 logger.debug('Ignoring: {}'.format(p))
 
         logger.debug('Nonce I: {}\nNonce R: {}'.format(binascii.hexlify(self.Ni), binascii.hexlify(self.Nr)))
-        logger.debug('DH shared secret: {}'.format(binascii.hexlify(self.diffie_hellman.shared_secret)))
+        logger.debug('DH shared secret: {}'.format(binascii.hexlify(self.diffie_hellman.__shared_secret)))
 
-        SKEYSEED = prf(self.Ni + self.Nr, self.diffie_hellman.shared_secret)
+        SKEYSEED = prf(self.Ni + self.Nr, self.diffie_hellman.__shared_secret)
 
         logger.debug(u"SKEYSEED is: {0!r:s}\n".format(binascii.hexlify(SKEYSEED)))
 

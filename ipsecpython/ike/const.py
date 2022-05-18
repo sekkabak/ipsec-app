@@ -8,7 +8,7 @@
 from enum import IntEnum
 
 import struct
-from . import dh
+from .. import DiffieHellman
 
 __author__ = 'kimvais'
 
@@ -60,7 +60,7 @@ TRANSFORMS = dict(
     PRF_HMAC_SHA2_512=(2, 7),  # RFC 4868
     ESN=(5, 1)  # RFC 5996
 )
-for group_id in dh.PRIMES.keys():
+for group_id in DiffieHellman.PRIMES.keys():
     TRANSFORMS['DH_GROUP_{0:d}'.format(group_id)] = (4, group_id)
 
 TRANFORM_ATTRIBUTES = struct.Struct('!2H')  # (0b10000000 | 14), Key Length
