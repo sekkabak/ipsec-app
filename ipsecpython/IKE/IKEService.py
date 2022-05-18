@@ -1,32 +1,21 @@
 from __future__ import annotations
+from audioop import add
 
 import errno
 import fcntl
-import multiprocessing
 import os
 import pickle
-from select import select
 import socket
-import sys
+import threading
 import time
-from multiprocessing import Process, Manager, Queue
-from typing import Union, Optional
 
-from scapy.compat import raw
-from scapy.layers.inet import IP, TCP
-from scapy.layers.ipsec import SecurityAssociation, ESP
-from scapy.packet import Raw
-import Router
-
-from StaticRouteRecord import StaticRouteRecord
 from Socket import Socket
 from Tunnel import Tunnel
 from DiffieHellman import DiffieHellman, to_bytes
 
-import sys, json
-import asyncio
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-import IKE
+import sys
 
 import logging
 logger = logging.getLogger("ike")
@@ -34,67 +23,151 @@ logger.setLevel(logging.DEBUG)
 
 
 class IKEService:
-    ike_port: int = 500
-    interface: str
-    router: Router
-    ikeSocket: IKE.IKESocket
-    sessions: dict
+    __ike_port: int = 500
+    __interface: str
+    __tunnels: list[Tunnel]
+    __server_socket: socket.socket
+    __sessions: dict
+    __dh: DiffieHellman
     
-    async def __aenter__(self, interface: str, router: Router):
+    def __init__(self, interface: str, tunnels: list[Tunnel]) -> None:
         logger.info(f"Initializing IKE")
-        self.loop = asyncio.get_event_loop()
-        self.interface = interface
-        self.router = router
+        self.__interface = interface
+        self.__tunnels = tunnels
+        self.__sessions = dict()
+        
+        self.__dh = DiffieHellman()
 
-        self.ikeSocket = IKE.IKESocket(self)
-        asyncio.create_task(self.__watch_for_init_packets())
+        self.__server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.__server_socket.bind((self.__interface, self.__ike_port))
+        fcntl.fcntl(self.__server_socket, fcntl.F_SETFL, os.O_NONBLOCK)
+        
+        t_listener = threading.Thread(target=self.__listener, daemon=True)
+        t_listener.start()
+        
+    def __listener(self):
+        while True:
+            try:
+                message, address = self.__server_socket.recvfrom(1024)
+                ike_socket = Socket(address[0], 500)
+                sess = self.__sessions.get(address[0])
+                logger.info(f"Message to IKE came from {address}")
+                
+                if message == b'DH init':
+                        self.__sessions[ike_socket.ip] = [1, None]
+                        self.__send(ike_socket, self.__dh.public_key)
+                        logger.info(f"Sended DH public key to {address[0]}")
+                elif sess != None:
+                    if sess[0] == 1: # diffiehellman fase
+                        other_key = int.from_bytes(message, "big")  
+                        shared_key = self.__dh.derivate(other_key=other_key)
+                        logger.info(f"IKE estabilished DH tunnel with {address[0]}")
+                        self.__sessions[address[0]] = [2, shared_key]
+                    elif sess[0] == 2 and message == b'IPsec IKE':  # IKE INIT fase
+                        sess[0] = 3
+                        self.__sessions[address[0]] = sess
+                    elif sess[0] == 3: # IKE fase
+                        key = self.__sessions[ike_socket.ip][1]
+                        
+                        cipher = Cipher(algorithms.AES(key[:32]), modes.ECB())
+                        decryptor = cipher.decryptor()
+                        data = decryptor.update(message) + decryptor.finalize()
+                        data = data[:-data[-1]]
+                        spi, crypt_algo, crypt_key = pickle.loads(data)
+                        logger.info(f"spi: {spi}")
+                        logger.info(f"crypt_algo: {crypt_algo}")
+                        logger.info(f"crypt_key: {crypt_key}")
+                        
+                        # TODO check if spi is ok
+                        self.__send(ike_socket, b'OK')
+                        tunnel = Tunnel()
+                        tunnel.spi = spi
+                        tunnel.crypt_algo = crypt_algo
+                        tunnel.crypt_key = crypt_key
+                        tunnel.dst_ip = ike_socket.ip
+                        tunnel.dst_port = 10000
+                        tunnel.network_ip = '127.0.0.13'
+                        tunnel.network_port = 10000
+                        self.__tunnels.append(tunnel)
+                        logger.info(f"IPsec tunnel to {ike_socket.ip} has been created")
 
-        return self
+                    elif sess[0] == 4 and message == b'OK': # IKE rcv respond
+                        tunnel = Tunnel()
+                        tunnel.spi, tunnel.crypt_algo, tunnel.crypt_key = sess[2]
+                        
+                        tunnel.dst_ip = ike_socket.ip
+                        tunnel.dst_port = 10000
+                        tunnel.network_ip = '127.0.0.13'
+                        tunnel.network_port = 10000
+                        self.__tunnels.append(tunnel)
+                        logger.info(f"IPsec tunnel to {ike_socket.ip} has been created")
+            except socket.error as e:
+                err = e.args[0]
+                if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+                    # no data
+                    pass
+                else:
+                    # a "real" error occurred
+                    logger.error(e)
 
-    async def __aexit__(self, *args, **kwargs):
-        await self.ikeSocket.__aexit__(*args, **kwargs)
-    
-    async def estabilish_DH_channel(self, ip: str):
-        dh = DiffieHellman()
+    def estabilish_DH_channel(self, ip: str, timeout = 5):
         ike_socket = Socket(ip, 500)
         
-        await self.loop.run_until_complete(self.ikeSocket.send(ike_socket, "DH init".encode("utf-8")))
+        self.__send(ike_socket, "DH init".encode("utf-8"))
         logger.info(f"Sended DH init packet to {ip}")
         
-        await self.loop.run_until_complete(self.ikeSocket.send(ike_socket, dh.public_key))
+        self.__send(ike_socket, self.__dh.public_key)
         logger.info(f"Sended DH public key to {ip}")
+        self.__sessions[ike_socket.ip] = [1, None]
         
-        other_key_bytes = await self.loop.run_until_complete(self.ikeSocket.receive())
-        other_key = int.from_bytes(other_key_bytes, "big")  
-        shared_key = dh.derivate(other_key=other_key)
-        logger.info(f"IKE estabilished DH tunnel with {ip}")
-        return 1, "test", "test".encode("utf-8")
-
-    async def receive_DH_channel(self, ip: str):
-        dh = DiffieHellman()
+        must_end = time.time() + timeout
+        while time.time() < must_end:
+            if self.__sessions[ike_socket.ip][0] > 1: 
+                return True
+            time.sleep(0.1)
+        
+        del self.__sessions[ike_socket.ip]
+        return False
+    
+    def propose_IPsec_keys(self, ip: str, timeout = 5):
         ike_socket = Socket(ip, 500)
         
-        other_key_bytes = await self.loop.run_until_complete(self.ikeSocket.receive())
-        other_key = int.from_bytes(other_key_bytes, "big")
+        if self.__sessions[ike_socket.ip] == None or self.__sessions[ike_socket.ip][0] < 2:
+            logger.error(f"{self.__sessions[ike_socket.ip]}")
+            return False
         
-        await self.loop.run_until_complete(self.ikeSocket.send(ike_socket, dh.public_key))
-        logger.info(f"Sended DH public key to {ip}")
+        key = self.__sessions[ike_socket.ip][1]
+        
+        self.__send(ike_socket, "IPsec IKE".encode("utf-8"))
+        logger.info(f"Sended IPsec IKE init packet to {ip}")
 
-        shared_key = dh.derivate(other_key=other_key)
-        logger.info(f"IKE estabilished DH tunnel with {ip}")
-        self.sessions[ip] = [2, shared_key]
-    
-    async def __watch_for_init_packets(self, seconds = 5):
-        while True:
-            await asyncio.sleep(seconds)
-            message, address = self.ikeSocket.tryreceive
-            if message == None:
-                continue
-            
-            ip = address[0]
-            if message == b'DH init':
-                self.sessions[ip] = [1, None]
-                self.receive_DH_channel(self, ip)
-            
-            if message == b'IPsec IKE':
-                pass
+        cipher = Cipher(algorithms.AES(key[:32]), modes.ECB())
+        encryptor = cipher.encryptor()
+        
+        crypt_algo = 'AES-CBC'
+        spi = int.from_bytes(os.urandom(8), "big")
+        crypt_key = os.urandom(16)
+        
+        data = pickle.dumps([spi, crypt_algo, crypt_key], 0)
+        length = 16 - (len(data) % 16)
+        data += bytes([length])*length
+        
+        ct = encryptor.update(data) + encryptor.finalize()
+        
+        self.__send(ike_socket, ct)
+        logger.info(f"Sended IPsec IKE keys to {ip}")
+        
+        self.__sessions[ike_socket.ip] = [4, None, [spi, crypt_algo, crypt_key]]
+        
+        must_end = time.time() + timeout
+        while time.time() < must_end:
+            if self.__sessions[ike_socket.ip][0] > 4: 
+                return True
+            time.sleep(0.1)
+        
+        del self.__sessions[ike_socket.ip]
+        return False
+        
+    def __send(self, socket: Socket, message: bytes) -> None:
+        logger.info(f"Sending {socket.totuple()} {message}")
+        self.__server_socket.sendto(message, socket.totuple())
