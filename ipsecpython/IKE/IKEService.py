@@ -9,6 +9,11 @@ import socket
 import threading
 import time
 
+from scapy.compat import raw
+from scapy.layers.inet import IP, TCP, UDP, ICMP
+from scapy.layers.ipsec import SecurityAssociation, ESP
+from scapy.packet import Raw
+
 from Socket import Socket
 from Tunnel import Tunnel
 from DiffieHellman import DiffieHellman, to_bytes
@@ -29,12 +34,15 @@ class IKEService:
     __server_socket: socket.socket
     __sessions: dict
     __dh: DiffieHellman
+    __find_network_f: function
+    t_listener: threading.Thread
     
-    def __init__(self, interface: str, tunnels: list[Tunnel]) -> None:
+    def __init__(self, interface: str, tunnels: list[Tunnel], find_network: function) -> None:
         logger.info(f"Initializing IKE")
         self.__interface = interface
         self.__tunnels = tunnels
         self.__sessions = dict()
+        self.__find_network_f = find_network
         
         self.__dh = DiffieHellman()
 
@@ -42,32 +50,37 @@ class IKEService:
         self.__server_socket.bind((self.__interface, self.__ike_port))
         fcntl.fcntl(self.__server_socket, fcntl.F_SETFL, os.O_NONBLOCK)
         
-        t_listener = threading.Thread(target=self.__listener, daemon=True)
-        t_listener.start()
+        self.t_listener = threading.Thread(target=self.__listener, daemon=True)
+        self.t_listener.start()
         
     def __listener(self):
         while True:
             try:
                 message, address = self.__server_socket.recvfrom(1024)
-                ike_socket = Socket(address[0], 500)
                 sess = self.__sessions.get(address[0])
                 logger.info(f"Message to IKE came from {address}")
-                
+
+                original_ip = address[0]
+                network_ip, port, is_hopping = self.__find_network_f(original_ip)
+                ike_socket = Socket(network_ip, port)
                 if message == b'DH init':
-                        self.__sessions[ike_socket.ip] = [1, None]
-                        self.__send(ike_socket, self.__dh.public_key)
-                        logger.info(f"Sended DH public key to {address[0]}")
+                        self.__sessions[original_ip] = [1, None]
+                        packet = IP(src=self.__interface, dst=original_ip)
+                        packet /= UDP(dport=500, sport=500)
+                        packet /= self.__dh.public_key
+                        self.__send(ike_socket, raw(packet))
+                        logger.info(f"Sended DH public key to {original_ip}")
                 elif sess != None:
                     if sess[0] == 1: # diffiehellman fase
                         other_key = int.from_bytes(message, "big")  
                         shared_key = self.__dh.derivate(other_key=other_key)
-                        logger.info(f"IKE estabilished DH tunnel with {address[0]}")
-                        self.__sessions[address[0]] = [2, shared_key]
+                        logger.info(f"IKE estabilished DH tunnel with {original_ip}")
+                        self.__sessions[original_ip] = [2, shared_key]
                     elif sess[0] == 2 and message == b'IPsec IKE':  # IKE INIT fase
                         sess[0] = 3
-                        self.__sessions[address[0]] = sess
+                        self.__sessions[original_ip] = sess
                     elif sess[0] == 3: # IKE fase
-                        key = self.__sessions[ike_socket.ip][1]
+                        key = self.__sessions[original_ip][1]
                         
                         cipher = Cipher(algorithms.AES(key[:32]), modes.ECB())
                         decryptor = cipher.decryptor()
@@ -79,26 +92,26 @@ class IKEService:
                         logger.info(f"crypt_key: {crypt_key}")
                         
                         # TODO check if spi is ok
-                        self.__send(ike_socket, b'OK')
+                        packet = IP(src=self.__interface, dst=original_ip)
+                        packet /= UDP(dport=500, sport=500)
+                        packet /= b'OK'
+                        self.__send(ike_socket, raw(packet))
                         tunnel = Tunnel()
                         tunnel.spi = spi
                         tunnel.crypt_algo = crypt_algo
                         tunnel.crypt_key = crypt_key
-                        tunnel.dst_ip = ike_socket.ip
-                        tunnel.dst_port = 10000
-                        tunnel.network_ip = '127.0.0.13'
-                        tunnel.network_port = 10000
+                        tunnel.dst_ip = original_ip
+                        tunnel.network_ip = network_ip
+                        tunnel.network_port = port
                         self.__tunnels.append(tunnel)
                         logger.info(f"IPsec tunnel to {ike_socket.ip} has been created")
 
                     elif sess[0] == 4 and message == b'OK': # IKE rcv respond
                         tunnel = Tunnel()
                         tunnel.spi, tunnel.crypt_algo, tunnel.crypt_key = sess[2]
-                        
-                        tunnel.dst_ip = ike_socket.ip
-                        tunnel.dst_port = 10000
-                        tunnel.network_ip = '127.0.0.13'
-                        tunnel.network_port = 10000
+                        tunnel.dst_ip = original_ip
+                        tunnel.network_ip = network_ip
+                        tunnel.network_port = port
                         self.__tunnels.append(tunnel)
                         logger.info(f"IPsec tunnel to {ike_socket.ip} has been created")
             except socket.error as e:
@@ -108,38 +121,52 @@ class IKEService:
                     pass
                 else:
                     # a "real" error occurred
+                    import traceback
+                    traceback.print_exc()
                     logger.error(e)
 
-    def estabilish_DH_channel(self, ip: str, timeout = 5):
-        ike_socket = Socket(ip, 500)
+    def estabilish_DH_channel(self, original_ip: str, network_ip: str, port: int, is_hopping: str, timeout = 5):
+        packet = IP(src=self.__interface, dst=original_ip)
+        packet /= UDP(dport=500, sport=500)
+        packet /= "DH init".encode("utf-8")
         
-        self.__send(ike_socket, "DH init".encode("utf-8"))
-        logger.info(f"Sended DH init packet to {ip}")
+        ike_socket = Socket(network_ip, port)
         
-        self.__send(ike_socket, self.__dh.public_key)
-        logger.info(f"Sended DH public key to {ip}")
-        self.__sessions[ike_socket.ip] = [1, None]
+        self.__send(ike_socket, raw(packet))
+        logger.info(f"Sended DH init packet to {original_ip}")
+
+        packet = IP(src=self.__interface, dst=original_ip)
+        packet /= UDP(dport=500, sport=500)
+        packet /= self.__dh.public_key
+        
+        self.__send(ike_socket, raw(packet))
+        logger.info(f"Sended DH public key to {original_ip}")
+        self.__sessions[original_ip] = [1, None]
         
         must_end = time.time() + timeout
         while time.time() < must_end:
-            if self.__sessions[ike_socket.ip][0] > 1: 
+            if self.__sessions[original_ip][0] > 1: 
                 return True
             time.sleep(0.1)
         
-        del self.__sessions[ike_socket.ip]
+        del self.__sessions[original_ip]
         return False
-    
-    def propose_IPsec_keys(self, ip: str, timeout = 5):
-        ike_socket = Socket(ip, 500)
+
+    def propose_IPsec_keys(self, original_ip: str, network_ip: str, port: int, is_hopping: str, timeout = 5):
+        ike_socket = Socket(network_ip, port)
         
-        if self.__sessions[ike_socket.ip] == None or self.__sessions[ike_socket.ip][0] < 2:
-            logger.error(f"{self.__sessions[ike_socket.ip]}")
+        if self.__sessions[original_ip] == None or self.__sessions[original_ip][0] < 2:
+            logger.error(f"{self.__sessions[original_ip]}")
             return False
         
-        key = self.__sessions[ike_socket.ip][1]
+        key = self.__sessions[original_ip][1]
         
-        self.__send(ike_socket, "IPsec IKE".encode("utf-8"))
-        logger.info(f"Sended IPsec IKE init packet to {ip}")
+
+        packet = IP(src=self.__interface, dst=original_ip)
+        packet /= UDP(dport=500, sport=500)
+        packet /= "IPsec IKE".encode("utf-8")
+        self.__send(ike_socket, raw(packet))
+        logger.info(f"Sended IPsec IKE init packet to {network_ip}")
 
         cipher = Cipher(algorithms.AES(key[:32]), modes.ECB())
         encryptor = cipher.encryptor()
@@ -154,20 +181,23 @@ class IKEService:
         
         ct = encryptor.update(data) + encryptor.finalize()
         
-        self.__send(ike_socket, ct)
-        logger.info(f"Sended IPsec IKE keys to {ip}")
+        packet = IP(src=self.__interface, dst=original_ip)
+        packet /= UDP(dport=500, sport=500)
+        packet /= ct
+        self.__send(ike_socket, raw(packet))
+        logger.info(f"Sended IPsec IKE keys to {network_ip}")
         
-        self.__sessions[ike_socket.ip] = [4, None, [spi, crypt_algo, crypt_key]]
+        self.__sessions[original_ip] = [4, None, [spi, crypt_algo, crypt_key]]
         
         must_end = time.time() + timeout
         while time.time() < must_end:
-            if self.__sessions[ike_socket.ip][0] > 4: 
+            if self.__sessions[original_ip][0] > 4: 
                 return True
             time.sleep(0.1)
         
-        del self.__sessions[ike_socket.ip]
+        del self.__sessions[original_ip]
         return False
         
     def __send(self, socket: Socket, message: bytes) -> None:
-        logger.info(f"Sending {socket.totuple()} {message}")
+        # logger.info(f"Sending {socket.totuple()} {message}")
         self.__server_socket.sendto(message, socket.totuple())

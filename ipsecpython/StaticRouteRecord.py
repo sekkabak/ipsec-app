@@ -1,22 +1,25 @@
+from socket import socket
 from Socket import Socket
 
 
 class StaticRouteRecord:
     network_ip: str
     network_mask: str
-    reach_socket: Socket
+    next_hop: str
+    port: int
 
-    def __init__(self, network_ip: str, network_mask: str, reach_socket: Socket):
+    def __init__(self, network_ip: str, network_mask: str, next_hop: str, port: int):
         self.network_ip = network_ip
         self.network_mask = network_mask
-        self.reach_socket = reach_socket
+        self.next_hop = next_hop
+        self.port = port
 
     def __iter__(self):
-        return iter((self.network_ip, self.network_mask, self.reach_socket))
+        return iter((self.network_ip, self.network_mask, self.next_hop, self.port))
 
     @classmethod
-    def fromtuple(cls, t: tuple[str, str, Socket]):
-        return cls(t[0], t[1], t[2])
+    def fromtuple(cls, t: tuple[str, str, str, int]):
+        return cls(t[0], t[1], t[2], t[3])
 
     def totuple(self) -> tuple[str, str, Socket]:
-        return self.network_ip, self.network_mask, self.reach_socket
+        return self.network_ip, self.network_mask, self.next_hop, self.port

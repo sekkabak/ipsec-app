@@ -1,3 +1,4 @@
+import threading
 from scapy.compat import raw
 from scapy.layers.inet import IP, TCP
 from scapy.layers.ipsec import SecurityAssociation, ESP
@@ -14,9 +15,10 @@ from multiprocessing import Process, Manager, Queue
 from typing import Union, Optional
 
 from scapy.compat import raw
-from scapy.layers.inet import IP, TCP
+from scapy.layers.inet import IP, TCP, ICMP
 from scapy.layers.ipsec import SecurityAssociation, ESP
 from scapy.packet import Raw
+from scapy.all import send
 
 from StaticRouteRecord import StaticRouteRecord
 from Socket import Socket
@@ -36,6 +38,9 @@ class Host:
     __listener_queue: "Queue[bytes]"
     __listener_process: Process
 
+    __ping_response: bool = False
+    t_listener: threading.Thread
+
     def __init__(self, interface: str, listen_port: int, network_gateway: Socket):
         self.__interface = interface
         self.__listen_port = listen_port
@@ -44,19 +49,44 @@ class Host:
         self.__listener_queue = Queue()
         self.__speaker_queue = Queue()
 
-    def __start_listener(self):
-        self.__listener_process = Process(target=self.__listener_function,
-                                          args=(self.__interface, self.__listen_port, self.__listener_queue,))
-        self.__listener_process.start()
+        self.t_listener = threading.Thread(target=self.__listener, daemon=True)
+        self.t_listener.start()
 
-    @staticmethod
-    def __listener_function(interface: str, listen_port: int, qq: "Queue[bytes]"):
+    def __listener(self):
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        server_socket.bind((interface, listen_port))
+        server_socket.bind((self.__interface, self.__listen_port))
 
         while True:
             message, address = server_socket.recvfrom(1024)
-            qq.put(message)
+            # qq.put(message)
+
+            packet = IP(message)
+            layers = self.__scapy_get_layers(packet)
+            layers_names = [x.name for x in layers]
+            logger.info(f"Packet came with layers: {layers_names}")
+            
+            if layers_names == ['IP', 'ICMP', 'Raw']:
+                raw_data = raw(packet[Raw])
+                if raw_data == b'ping':
+                    logger.info(f"Sending pong packet to {packet.src}")
+                    self.send_ICMP_packet(packet.src, b'pong')
+                elif raw_data == b'pong':
+                    self.__ping_response = True
+                continue
+
+            data = pickle.loads(packet[Raw].load)
+            logger.error(f"From {packet.src} came data: {data}")
+
+    def __scapy_get_layers(self, packet):
+        layers = []
+        counter = 0
+        while True:
+            layer = packet.getlayer(counter)
+            if layer is None:
+                break
+            layers.append(layer)
+            counter += 1
+        return layers
 
     @staticmethod
     def sender_process(data):
@@ -87,25 +117,32 @@ class Host:
                  self.__network_gateway.port)
         self.sender_process(param)
 
-    def __listen_loop_operation(self):
-        if not self.__listener_queue.empty():
-            message = self.__listener_queue.get()
-            packet = IP(message)
-            data = pickle.loads(packet[Raw].load)
-            logger.error(f"From {packet.src} came data: {data}")
-        # else:
-        #     logger.error(f"nothing")
+    def send_ICMP_packet(self, ip: str, data: bytes):
+        internet_packet = IP(src=self.__interface, dst=ip)
+        icmp_packet = ICMP()
+        raw_data = data
 
-    def stop_host(self):
-        print("host is turning off")
-        self.__listener_process.kill()
-        exit()
-
-    def start(self):
-        self.__start_listener()
-        
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.bind((self.__interface, 0))
+        s.sendto(raw(internet_packet/icmp_packet/raw_data), (self.__network_gateway.ip, self.__network_gateway.port))
+        s.close()
+    
+    def ping(self, ip, timeout=5):
         try:
-            while True:
-                self.__listen_loop_operation()
-        except KeyboardInterrupt:
-            self.stop_host(self)
+            self.__ping_response = False
+            self.send_ICMP_packet(ip, b'ping')
+
+            i=0
+            while i<timeout and self.__ping_response == False:
+                time.sleep(0.001)
+                i+=0.001
+            if self.__ping_response == True:
+                delay="{:.3f}".format(i)
+                print(f"Host responded in {delay}s")
+            else:
+                print(f"Timeout")
+        except IndexError:
+            print("Destination host unreachable")
+
+    def listen_forever(self):
+        self.t_listener.join()

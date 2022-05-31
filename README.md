@@ -7,8 +7,8 @@ $ npm install
 ## 2. python virtual env
 $ python3 -m venv venv<br>
 ## 3. activate venv
-(windows) .\env\Scripts\activate<br>
-(linux) source env/bin/activate<br>
+(windows) .\venv\Scripts\activate<br>
+(linux) source venv/bin/activate<br>
 ## 4. install python libs
 $ pip install -r requirements.txt
 
@@ -34,3 +34,21 @@ TODO (https://www.ciscopress.com/articles/article.asp?p=25474&seqNum=7)
       3. The identities of the endpoints
 5. Working IPsec tunnel
 6. Tunnel Termination
+---
+# Example addressation
+---
+
+| ID | Network address      | Subnet mask           | Usable Host IP Range    |
+| -- | -------------------- |:---------------------:| -----------------------:|
+| 1  | 127.0.0.16           | 255.255.255.240       | 127.0.0.17 - 127.0.0.30 |
+| 2  | 127.0.0.32           | 255.255.255.240       | 127.0.0.33 - 127.0.0.46 |
+| 3  | 127.0.0.48           | 255.255.255.240       | 127.0.0.49 - 127.0.0.62 |
+
+
+| Device name   |       IP      | Network ID |
+| ------------- |:-------------:| ----------:|
+| Router 1      | 127.0.0.16    |      1     |
+| Host 1        | 127.0.0.17    |      1     |
+| Router 2      | 127.0.0.32    |      2     |
+| Router 3      | 127.0.0.48    |      3     |
+| Host 2        | 127.0.0.49    |      3     |

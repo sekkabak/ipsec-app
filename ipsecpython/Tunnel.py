@@ -4,7 +4,6 @@ from Socket import Socket
 class Tunnel:
     spi: int
     dst_ip: str
-    dst_port: int
     network_ip: str
     network_port: int
     crypt_algo: str
