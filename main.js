@@ -16,6 +16,7 @@ function once_f(txt) {
                 // On macOS it's common to re-create a window in the app when the
                 // dock icon is clicked and there are no other windows open.
                 if (BrowserWindow.getAllWindows().length === 0) createWindow()
+
             })
         })
     }
@@ -35,8 +36,8 @@ python.stdout.on('data', function (data) {
 function createWindow() {
     // Create the browser window.
     const mainWindow = new BrowserWindow({
-        width: 800,
-        height: 600,
+        width: 1350,
+        height: 800,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js')
         }
