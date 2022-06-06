@@ -26,7 +26,6 @@
           <button class="btn btn-sm btn-success mt-1" style="margin-left: 10px" id="button1" onclick="add_element_to_array()">Send message</button>
           <input class="mt-1" style="margin-left: 10px" id="fileone" type="file"/>
 
-
         </div>
 
         <div class="grid-item">
@@ -35,46 +34,17 @@
           </div>
           <label for="message2" class="message-label">Write message:</label><br>
           <input type="text" id="message2" class="message">
-
           <button class="btn btn-sm btn-success ms-2 mt-1" onclick="add_element_to_array_2()">Send message</button>
-          <button class="btn btn-sm btn-primary mt-1">&File</button>
+          <input class="mt-1" style="margin-left: 10px" id="filetwo" type="file"/>
 
         </div>
 
       </div>
-
-<!--      <script>-->
-<!--        Vue.createApp({-->
-<!--          data() {-->
-<!--            return{-->
-<!--              messages: ['siema', 'co tam', 'pozdro']-->
-<!--            }-->
-<!--          }-->
-<!--        }).mount('#messagi')-->
-<!--      </script>-->
-
-<!--      <script>-->
-<!--        Vue.createApp({-->
-<!--          data() {-->
-<!--            return {-->
-<!--              messages: ['siema', 'co tam', 'pozdro']-->
-<!--            }-->
-<!--          }-->
-<!--          methods:{-->
-<!--            getLength: function(){-->
-<!--            this.length = this.myInput.length;-->
-<!--            }-->
-<!--          }-->
-<!--        }).mount('#messagi')-->
-<!--      </script>-->
 
       <form method="post" id="test-form">
         <input type="submit" class="btn btn-sm btn-primary" value="Send test packet">
       </form>
     </div>
 
-
-    <!-- You can also require other files to run in this process -->
-    <!--<script src="renderer.js"></script>-->
   </body>
 </html>
