@@ -3,21 +3,25 @@ from flask import Flask, request, make_response
 from flask_cors import CORS
 from gevent.pywsgi import WSGIServer
 from Host import Host
+from Socket import Socket
 
 app = Flask(__name__)
 CORS(app)
 local_ip = '127.0.0.1'
-local_port = 0
+local_port = 10000
+host = Host('127.0.0.17', 10000, Socket('127.0.0.16', 10000))
 
 
 @app.route('/')
 def index():
     return ''
 
+@app.route('/ping/<ip>', methods=['GET', 'POST'])
+def send_ping(ip):
+    return host.ping(ip)
+
 @app.route('/send_message', methods=['POST'])
 def send_test():
-    # host = Host(b'1234567890123456', ('127.0.0.1', 51234), local_port)
-    # host.send("test", "127.0.0.1", 12345)
     return str(request.get_json())
 
 @app.route('/users/<user_id>', methods = ['GET', 'POST', 'DELETE'])

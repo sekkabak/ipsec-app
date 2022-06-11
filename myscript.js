@@ -16,7 +16,7 @@ function add_element_to_array(){
 
             console.log("moj bodyrequest", bodyrequest);
 
-            const requestUrl = "http://127.0.0.1:5000/users/1"
+            const requestUrl = apiUrl + "/users/1"
             const Http = new XMLHttpRequest();
             Http.open("POST", requestUrl);
             Http.send(JSON.stringify(bodyrequest));
@@ -32,7 +32,7 @@ function add_element_to_array(){
           file = document.getElementById("fileone").files[0];
           console.log('to moj plik:', file);
 
-          const requestUrl = "http://127.0.0.1:5000/files/1";
+          const requestUrl = apiUrl + "/files/1";
           const httpRequest = new XMLHttpRequest();
           let formData = new FormData();
           formData.append("file", file);
@@ -60,7 +60,7 @@ function add_element_to_array_2(){
 
             console.log("moj bodyrequest", bodyrequest);
 
-            const requestUrl = "http://127.0.0.1:5000/users/2"
+            const requestUrl = apiUrl + "/users/2"
             const Http = new XMLHttpRequest();
             Http.open("POST", requestUrl);
             Http.send(JSON.stringify(bodyrequest));
@@ -76,7 +76,7 @@ function add_element_to_array_2(){
           file = document.getElementById("filetwo").files[0];
           console.log('to moj plik:', file);
 
-          const requestUrl = "http://127.0.0.1:5000/files/2";
+          const requestUrl = apiUrl + "/files/2";
           const httpRequest = new XMLHttpRequest();
           let formData = new FormData();
           formData.append("file", file);

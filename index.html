@@ -1,50 +1,130 @@
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/html">
-  <head>
+
+<head>
     <meta charset="UTF-8">
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-<!--    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">-->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
     <link href="styles.css" rel="stylesheet">
     <script src="myscript.js"></script>
-  </head>
-  <body>
-  <script src="min.js"></script>
+</head>
 
-    <div class="okno">
-      <h1>Ipsec demonstration</h1>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand" href="#">IPSec demonstration</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
 
-<!--      <div id="app">{{ message }}</div>-->
-
-      <div class="grid-container" id="app">
-
-        <div class="grid-item">
-          <div class="chat-window-1" id="chat-window-1">
-          </div>
-          <label for="message1" class="message-label">Write message:</label><br>
-          <input type="text" id="message1" class="message">
-          <button class="btn btn-sm btn-success mt-1" style="margin-left: 10px" id="button1" onclick="add_element_to_array()">Send message</button>
-          <input class="mt-1" style="margin-left: 10px" id="fileone" type="file"/>
-
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="index.html">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="chat.html">Chat</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="ping.html">Ping</a>
+                </li>
+            </ul>
         </div>
+    </nav>
 
-        <div class="grid-item">
-          <div class="chat-window-2" id="chat-window-2">
 
-          </div>
-          <label for="message2" class="message-label">Write message:</label><br>
-          <input type="text" id="message2" class="message">
-          <button class="btn btn-sm btn-success ms-2 mt-1" onclick="add_element_to_array_2()">Send message</button>
-          <input class="mt-1" style="margin-left: 10px" id="filetwo" type="file"/>
 
-        </div>
+    <h1 id="ipsec-app">ipsec-app</h1>
+    <p>IPsec DEMONSTRATION as emulation project</p>
+    <h1 id="how-to-install-for-devs">How to install for devs</h1>
+    <h2 id="1-npm">1. npm</h2>
+    <p>$ npm install</p>
+    <h2 id="2-python-virtual-env">2. python virtual env</h2>
+    <p>$ python3 -m venv venv<br></p>
+    <h2 id="3-activate-venv-note-that-routers-cannot-work-under-windows-">3. activate venv (note that routers cannot work under windows)</h2>
+    <p>(windows) .\venv\Scripts\activate<br>
+    (linux) source venv/bin/activate<br></p>
+    <h2 id="4-install-python-libs">4. install python libs</h2>
+    <p>$ pip install -r requirements.txt</p>
+    <h1 id="how-to-run">How to run</h1>
+    <p>npm start</p>
+    <h1 id="how-its-working-step-by-step-">How its working (step by step)</h1>
+    <h2 id="testing-network-setup">Testing network setup</h2>
+    <p><img src="schemat.png" alt="network"></p>
+    <hr>
+    <h1 id="example-addressation">Example addressation</h1>
+    <hr>
+    <table>
+    <thead>
+    <tr>
+    <th>ID</th>
+    <th>Network address</th>
+    <th style="text-align:center">Subnet mask</th>
+    <th style="text-align:right">Usable Host IP Range</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>1</td>
+    <td>127.0.0.16</td>
+    <td style="text-align:center">255.255.255.240</td>
+    <td style="text-align:right">127.0.0.17 - 127.0.0.30</td>
+    </tr>
+    <tr>
+    <td>2</td>
+    <td>127.0.0.32</td>
+    <td style="text-align:center">255.255.255.240</td>
+    <td style="text-align:right">127.0.0.33 - 127.0.0.46</td>
+    </tr>
+    <tr>
+    <td>3</td>
+    <td>127.0.0.48</td>
+    <td style="text-align:center">255.255.255.240</td>
+    <td style="text-align:right">127.0.0.49 - 127.0.0.62</td>
+    </tr>
+    </tbody>
+    </table>
+    <table>
+    <thead>
+    <tr>
+    <th>Device name</th>
+    <th style="text-align:center">IP</th>
+    <th style="text-align:right">Network ID</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Router 1</td>
+    <td style="text-align:center">127.0.0.16</td>
+    <td style="text-align:right">1</td>
+    </tr>
+    <tr>
+    <td>Host 1</td>
+    <td style="text-align:center">127.0.0.17</td>
+    <td style="text-align:right">1</td>
+    </tr>
+    <tr>
+    <td>Router 2</td>
+    <td style="text-align:center">127.0.0.32</td>
+    <td style="text-align:right">2</td>
+    </tr>
+    <tr>
+    <td>Router 3</td>
+    <td style="text-align:center">127.0.0.48</td>
+    <td style="text-align:right">3</td>
+    </tr>
+    <tr>
+    <td>Host 2</td>
+    <td style="text-align:center">127.0.0.49</td>
+    <td style="text-align:right">3</td>
+    </tr>
+    </tbody>
+    </table>
+    
 
-      </div>
-
-      <form method="post" id="test-form">
-        <input type="submit" class="btn btn-sm btn-primary" value="Send test packet">
-      </form>
     </div>
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+</body>
 
-  </body>
 </html>

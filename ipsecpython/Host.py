@@ -34,10 +34,6 @@ class Host:
     __listen_port: int
     __network_gateway: Socket
 
-    __manager: Manager
-    __listener_queue: "Queue[bytes]"
-    __listener_process: Process
-
     __ping_response: bool = False
     t_listener: threading.Thread
 
@@ -45,9 +41,6 @@ class Host:
         self.__interface = interface
         self.__listen_port = listen_port
         self.__network_gateway = network_gateway
-        
-        self.__listener_queue = Queue()
-        self.__speaker_queue = Queue()
 
         self.t_listener = threading.Thread(target=self.__listener, daemon=True)
         self.t_listener.start()
@@ -58,7 +51,6 @@ class Host:
 
         while True:
             message, address = server_socket.recvfrom(1024)
-            # qq.put(message)
 
             packet = IP(message)
             layers = self.__scapy_get_layers(packet)
@@ -138,11 +130,11 @@ class Host:
                 i+=0.001
             if self.__ping_response == True:
                 delay="{:.3f}".format(i)
-                print(f"Host responded in {delay}s")
+                return f"Host responded in {delay}s"
             else:
-                print(f"Timeout")
+                return "Timeout"
         except IndexError:
-            print("Destination host unreachable")
+            return "Destination host unreachable"
 
     def listen_forever(self):
         self.t_listener.join()
