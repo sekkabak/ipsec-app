@@ -2,7 +2,7 @@ import socket
 from flask import Flask, request, make_response
 from flask_cors import CORS
 from gevent.pywsgi import WSGIServer
-from Middleware.Host import Host
+from Host import Host
 
 app = Flask(__name__)
 CORS(app)
