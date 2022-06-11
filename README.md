@@ -6,7 +6,7 @@ IPsec DEMONSTRATION as emulation project
 $ npm install
 ## 2. python virtual env
 $ python3 -m venv venv<br>
-## 3. activate venv
+## 3. activate venv (note that routers cannot work under windows)
 (windows) .\venv\Scripts\activate<br>
 (linux) source venv/bin/activate<br>
 ## 4. install python libs

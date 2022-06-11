@@ -1,6 +1,7 @@
 // Modules to control application life and create native browser window
 const {app, BrowserWindow, ipcMain, remote} = require('electron')
 const path = require('path')
+const fs = require('fs')
 
 let middlewareHost;
 let once = false;
@@ -22,8 +23,15 @@ function once_f(txt) {
     }
 }
 
-// starting python server
-var python = require('child_process').spawn('./venv/Scripts/python.exe', ['./client.py']);
+
+const dir = './uploads';
+// check if directory exists
+if (fs.existsSync('./venv/Scripts')) {
+    var python = require('child_process').spawn('./venv/Scripts/python.exe', ['./ipsecpython/client.py']);
+} else {
+    var python = require('child_process').spawn('./venv/bin/python', ['./ipsecpython/client.py']);
+}
+
 python.stdout.on('data', function (data) {
     let txt = data.toString('utf8');
     console.log("Middleware: ", txt);
@@ -47,9 +55,9 @@ function createWindow() {
     mainWindow.loadFile('index.html')
 
 
-    // python.stderr.on('data', (data) => {
-    //   console.log(`stderr: ${data}`); // when error
-    // });
+    python.stderr.on('data', (data) => {
+      console.log(`stderr: ${data}`); // when error
+    });
 
     // Open the DevTools.
     mainWindow.webContents.openDevTools();
@@ -62,7 +70,8 @@ function createWindow() {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', function () {
-    if (process.platform !== 'darwin') app.quit()
+    app.quit();
+    python.kill();
 })
 
 // In this file you can include the rest of your app's specific main process
