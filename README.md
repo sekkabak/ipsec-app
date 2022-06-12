@@ -11,6 +11,8 @@ $ python3 -m venv venv<br>
 (linux) source venv/bin/activate<br>
 ## 4. install python libs
 $ pip install -r requirements.txt
+OR
+pip3 install -r requirements.txt
 
 # How to run
 npm start

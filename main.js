@@ -27,8 +27,10 @@ function once_f(txt) {
 const dir = './uploads';
 // check if directory exists
 if (fs.existsSync('./venv/Scripts')) {
+    console.log("Windows:");
     var python = require('child_process').spawn('./venv/Scripts/python.exe', ['./ipsecpython/client.py']);
 } else {
+    console.log("Unix:");
     var python = require('child_process').spawn('./venv/bin/python', ['./ipsecpython/client.py']);
 }
 
