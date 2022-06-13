@@ -3,6 +3,8 @@ import pickle
 import socket
 import threading
 import time
+import sys
+import errno
 from multiprocessing import Process, Queue
 from typing import Optional
 
@@ -44,6 +46,8 @@ class Router:
     __ping_response: bool = False
 
     def __init__(self, interface: str, listen_port: int, speaker_port: int):
+        self.__check_sudo_permissions()
+
         self.__interface = interface
         self.__listen_port = listen_port
         self.__speaker_port = speaker_port
@@ -54,6 +58,18 @@ class Router:
 
         self.__listener_queue = Queue()
         self.__speaker_queue = Queue()
+
+    def __check_sudo_permissions(self):
+        if os.geteuid() != 0:
+            sys.exit("Routers can only run under Unix and you need root permissions")
+
+
+        # try:
+        #     open('/etc/foo', 'w').close()
+        #     os.remove('/etc/foo')
+        # except Exception as e:
+        #     if (e == errno.EPERM):
+        #         sys.exit("Routers can only run under Unix and you need root permissions")
 
     def __start_listener(self):
         self.__listener_process = Process(target=self.__listener_function,

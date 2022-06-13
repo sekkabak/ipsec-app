@@ -10,6 +10,7 @@ CORS(app)
 local_ip = '127.0.0.1'
 local_port = 10000
 host = Host('127.0.0.17', 10000, Socket('127.0.0.16', 10000))
+# host = Host('0.0.0.0', 10000, Socket('65.52.138.88', 10000))
 
 
 @app.route('/')
