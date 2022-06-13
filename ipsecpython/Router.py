@@ -63,14 +63,6 @@ class Router:
         if os.geteuid() != 0:
             sys.exit("Routers can only run under Unix and you need root permissions")
 
-
-        # try:
-        #     open('/etc/foo', 'w').close()
-        #     os.remove('/etc/foo')
-        # except Exception as e:
-        #     if (e == errno.EPERM):
-        #         sys.exit("Routers can only run under Unix and you need root permissions")
-
     def __start_listener(self):
         self.__listener_process = Process(target=self.__listener_function,
                                           args=(self.__interface, self.__listen_port, self.__listener_queue,))
@@ -83,7 +75,7 @@ class Router:
 
         while True:
             time.sleep(0.05)
-            message, address = server_socket.recvfrom(1024)
+            message, address = server_socket.recvfrom(32848)
             qq.put(message)
             time.sleep(0.05)
 
@@ -104,8 +96,6 @@ class Router:
             time.sleep(0.05)
 
     def send_TCP_packet(self, ip: str, data: bytes):
-        # TODO implementacja sprawdzania czy wysylamy na endpoint ze zestawionym ipsecem
-
         dest_ip, port, is_hopping = self.find_network(ip)
         internet_packet = IP()
         internet_packet.src = self.__interface
@@ -131,6 +121,13 @@ class Router:
         """
         return ".".join(map(str, [i & m for i, m in zip(map(int, ip.split(".")),
                                                         map(int, mask.split(".")))]))
+
+    def get_network_ip(self, dest_ip: str):
+        for ip, mask, next_hop, port in self.__static_routes_table:
+            output = Router.__get_network_address(dest_ip, mask)
+            if output == ip:
+                return (ip, port)
+        return None
 
     def find_network(self, dest_ip: str):
         """Returns way to move to given @dest_ip target
@@ -172,19 +169,11 @@ class Router:
         """
         self.__static_routes_table.append(StaticRouteRecord(ip, mask, next_hop, port))
 
-    # def __get_trace(self, dest_ip: str) -> Socket:
-    #     try:
-    #         static_route = next(static_route for static_route in self.__static_routes_table if static_route.network_ip == dest_ip)
-    #         return static_route.reach_socket
-    #     except StopIteration:
-    #         return None
-
-    # TODO implementation dla UDP
     def __encrypt_package_TCP(self, sender: Socket, destination: Socket, message: bytes, tunnel: Tunnel) -> bytes:
         sa = SecurityAssociation(ESP, spi=tunnel.spi, crypt_algo=tunnel.crypt_algo, crypt_key=tunnel.crypt_key)
         p = IP(src=sender.ip, dst=destination.ip)
         p /= TCP(sport=sender.port, dport=destination.port)
-        p /= Raw(pickle.dumps(message))
+        p /= Raw(message)
 
         e = IP(src=self.__interface, dst=tunnel.dst_ip)
         e /= Raw(sa.encrypt(p))
@@ -194,7 +183,7 @@ class Router:
         sa = SecurityAssociation(ESP, spi=tunnel.spi, crypt_algo=tunnel.crypt_algo, crypt_key=tunnel.crypt_key)
         p = IP(src=sender.ip, dst=destination.ip)
         p /= TCP(sport=sender.port, dport=destination.port)
-        p /= Raw(pickle.dumps(message))
+        p /= Raw(message)
 
         e = IP(src=self.__interface, dst=tunnel.dst_ip)
         e /= Raw(sa.encrypt(p))
@@ -207,10 +196,10 @@ class Router:
     def receive_estabilished_tunnel(self, tunnel: Tunnel):
         self.__tunnels.append(tunnel)
 
-    def __has_tunnel(self, socket: Socket) -> Optional[Tunnel]:
+    def __has_tunnel(self, ip) -> Optional[Tunnel]:
         try:
             for tunnel in self.__tunnels:
-                if tunnel.dst_ip == socket.ip:
+                if tunnel.dst_ip == ip:
                     return tunnel
             return None
         except IndexError:
@@ -227,60 +216,6 @@ class Router:
             counter += 1
         return layers
 
-    def __handle_network_inbound_TCP_traffic(self, message: bytes):
-        packet = IP(message)
-
-        network_dst = self.find_network(packet.dst)
-        tunnel = self.__has_tunnel(network_dst.dst)
-        if tunnel != None:
-            import traceback
-            try:
-                sender = self.find_network(packet.src)
-                destination = Socket(packet.dst, packet.dport)
-                logger.error(f"Packet was encrypted from {sender.totuple()} to {destination.totuple()}")
-                package = self.__encrypt_package_TCP(sender, destination, packet.payload.load, tunnel)
-                trace = self.__get_trace(tunnel.network_ip)
-                # trace_ip = self.find_network(tunnel.network_ip)
-                self.__speaker_queue.put((trace, package))
-            except Exception as e:
-                logger.error(f"{traceback.print_exc()}")
-                logger.error(f"{e}")
-
-    def __handle_network_inbound_UDP_traffic(self, message: bytes):
-        packet = IP(message)
-        
-        network_dst = self.find_network(packet.dst)
-        tunnel = self.__has_tunnel(network_dst.dst)
-        if tunnel != None:
-            import traceback
-            try:
-                sender = self.find_network(packet.src)
-                destination = Socket(packet.dst, packet.dport)
-                logger.error(f"Packet was encrypted from {sender.totuple()} to {destination.totuple()}")
-                package = self.__encrypt_package_UDP(sender, destination, packet.payload.load, tunnel)
-                trace = self.__get_trace(tunnel.network_ip)
-                self.__speaker_queue.put((trace, package))
-            except Exception as e:
-                logger.error(f"{traceback.print_exc()}")
-                logger.error(f"{e}")
-            
-    def __handle_network_outbound_traffic(self, message: bytes):
-        packet = IP(message)
-        
-        network_dst = self.find_network(packet.dst)
-        tunnel = self.__has_tunnel(network_dst.dst)
-        if tunnel != None:
-            import traceback
-            try:
-                data = self.__decrypt_packet(packet.payload.load, tunnel)
-                inner_packet: IP = data
-                sckt: Socket = Socket(inner_packet.dst, inner_packet.dport)
-                logger.error(f"Packet was send to {sckt.totuple()}")
-                self.__speaker_queue.put((sckt, raw(data)))
-            except Exception as e:
-                logger.error(f"{traceback.print_exc()}")
-                logger.error(f"{e}")
-    
     def __handle_ping(self, message: bytes):
         packet = IP(message)
         raw_data = raw(packet[Raw])
@@ -301,13 +236,31 @@ class Router:
                     layers_names = [x.name for x in layers]
                     logger.info(f"Packet came with layers: {layers_names}")
 
-                    if packet.dst != self.__interface:
+                    network = self.get_network_ip(packet.dst)
+                    # network = self.find_network(packet.dst)
+                    if network != None:
+                        next_dst = network[0]
+                        port = network[1]
+                        tunnel = self.__has_tunnel(next_dst)
+                    else:
+                        next_dst = "0"
+                        port = 0
+                        tunnel = None
+
+                    if packet.dst != self.__interface and tunnel != None and ('TCP' in layers_names or 'UDP' in layers_names):
+                        logger.info(f"Packet that can be tunneled from {packet.dst} in {tunnel.dst_ip}")
+                        if 'TCP' in layers_names:
+                            data = self.__encrypt_package_TCP(Socket(packet.src, packet.sport), Socket(packet.dst, packet.dport), raw(packet[Raw]), tunnel)
+                        elif 'UDP' in layers_names:
+                            data = self.__encrypt_package_UDP(Socket(packet.src, packet.sport), Socket(packet.dst, packet.dport), raw(packet[Raw]), tunnel)
+                        self.__speaker_queue.put((Socket(tunnel.network_ip, tunnel.network_port), data))
+                    elif packet.dst != self.__interface:
                         try:
                             next_dst, port, is_hopping = self.find_network(packet.dst)
                             logger.info(f"Forwarding packet from {packet.src} to {next_dst}")
 
-                            if('TCP' in layers_names or 'UDP' in layers_names):
-                                packet.dst=next_dst
+                            if 'ISAKMP' in layers_names:
+                                packet.dst = next_dst
                                 send(packet, verbose=False)
                             else:
                                 self.__speaker_queue.put((Socket(next_dst, port), message))
@@ -320,24 +273,17 @@ class Router:
                         logger.info(f"Ping packet")
                         self.__handle_ping(message)
                         continue
+                    elif layers_names == ['IP', 'Raw']:
+                        tunnel = self.__has_tunnel(packet.src)
+                        decrypted_packet = self.__decrypt_packet(raw(packet[Raw]), tunnel)
 
-                    # if layers_names == ['IP', 'UDP', 'Raw']:
-                    #     logger.info(f"UDP packet came")
-                    #     self.__handle_network_inbound_UDP_traffic(message)
-                    #     continue
-
-                    # if layers_names == ['IP', 'TCP', 'Raw']:
-                    #     logger.info(f"Inbound TCP packet came")
-                    #     self.__handle_network_inbound_TCP_traffic(message)
-                    #     continue
-
-                    # if layers_names == ['IP', 'Raw']:
-                    #     logger.info(f"Outbound packet came")
-                    #     self.__handle_network_outbound_traffic(message)
-                    #     continue
-                        
+                        next_dst, port, is_hopping = self.find_network(decrypted_packet.dst)
+                        self.__speaker_queue.put((Socket(next_dst, port), raw(decrypted_packet)))
+                    elif layers_names == ['UDP', 'Raw']: 
+                        pass
                 except:
-                    pass
+                    import traceback
+                    print(traceback.format_exc())
             time.sleep(0.05)
 
     def __print_help(self):

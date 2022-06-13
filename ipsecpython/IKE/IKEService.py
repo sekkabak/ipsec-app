@@ -8,6 +8,7 @@ import pickle
 import socket
 import threading
 import time
+import random
 
 from scapy.compat import raw
 from scapy.layers.inet import IP, TCP, UDP, ICMP
@@ -104,7 +105,7 @@ class IKEService:
                         tunnel.network_ip = network_ip
                         tunnel.network_port = port
                         self.__tunnels.append(tunnel)
-                        logger.info(f"IPsec tunnel to {ike_socket.ip} has been created")
+                        logger.info(f"IPsec tunnel to {original_ip} has been created")
 
                     elif sess[0] == 4 and message == b'OK': # IKE rcv respond
                         tunnel = Tunnel()
@@ -113,7 +114,7 @@ class IKEService:
                         tunnel.network_ip = network_ip
                         tunnel.network_port = port
                         self.__tunnels.append(tunnel)
-                        logger.info(f"IPsec tunnel to {ike_socket.ip} has been created")
+                        logger.info(f"IPsec tunnel to {original_ip} has been created")
             except socket.error as e:
                 err = e.args[0]
                 if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
@@ -172,7 +173,7 @@ class IKEService:
         encryptor = cipher.encryptor()
         
         crypt_algo = 'AES-CBC'
-        spi = int.from_bytes(os.urandom(8), "big")
+        spi = random.randint(0, 4294967295)
         crypt_key = os.urandom(16)
         
         data = pickle.dumps([spi, crypt_algo, crypt_key], 0)

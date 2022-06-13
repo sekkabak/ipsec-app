@@ -5,10 +5,6 @@
 // selectively enable features needed in the rendering
 // process.
 
-function load_page() {
-     document.getElementById("test-form").action = apiUrl + "/send_test";
-}
-
 function waitForMiddleware(){
     if(typeof apiUrl !== "undefined"){
         load_page();

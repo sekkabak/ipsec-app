@@ -1,0 +1,22 @@
+<div class="container py-4 jumbotron top-5-percent">
+  <table onload="fill_my_data()">
+    <tr>
+      <td>My IP:</td>
+      <td id="my_ip">{{$route.meta.local_ip}}</td>
+    </tr>
+    <tr>
+      <td>My port:</td>
+      <td id="my_port">{{$route.meta.local_port}}</td>
+    </tr>
+    <tr>
+      <td>My gateway:</td>
+      <td id="my_gateway">{{$route.meta.gateway_ip}}</td>
+    </tr>
+  </table>
+  <p class="lead">Set new network gateway (your router)</p>
+  <input type="text" id="update-ip" />
+  <button class="btn btn-secondary" id="update-submit" onclick="do_update()">
+    Send ping
+  </button>
+  <div id="update-result"></div>
+</div>

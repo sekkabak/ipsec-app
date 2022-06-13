@@ -1,0 +1,90 @@
+<h1 id="ipsec-app">ipsec-app</h1>
+<p>IPsec DEMONSTRATION as emulation project</p>
+<h1 id="how-to-install-for-devs">How to install for devs</h1>
+<h2 id="1-npm">1. npm</h2>
+<p>$ npm install</p>
+<h2 id="2-python-virtual-env">2. python virtual env</h2>
+<p>$ python3 -m venv venv<br /></p>
+<h2 id="3-activate-venv-note-that-routers-cannot-work-under-windows-">
+  3. activate venv (note that routers cannot work under windows)
+</h2>
+<p>
+  (windows) .\venv\Scripts\activate<br />
+  (linux) source venv/bin/activate<br />
+</p>
+<h2 id="4-install-python-libs">4. install python libs</h2>
+<p>$ pip install -r requirements.txt</p>
+<h1 id="how-to-run">How to run</h1>
+<p>npm start</p>
+<h1 id="how-its-working-step-by-step-">How its working (step by step)</h1>
+<h2 id="testing-network-setup">Testing network setup</h2>
+<p><img src="schemat.png" alt="network" style="width:100%"/></p>
+<hr />
+<h1 id="example-addressation">Example addressation</h1>
+<hr />
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Network address</th>
+      <th style="text-align: center">Subnet mask</th>
+      <th style="text-align: right">Usable Host IP Range</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>127.0.0.16</td>
+      <td style="text-align: center">255.255.255.240</td>
+      <td style="text-align: right">127.0.0.17 - 127.0.0.30</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>127.0.0.32</td>
+      <td style="text-align: center">255.255.255.240</td>
+      <td style="text-align: right">127.0.0.33 - 127.0.0.46</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>127.0.0.48</td>
+      <td style="text-align: center">255.255.255.240</td>
+      <td style="text-align: right">127.0.0.49 - 127.0.0.62</td>
+    </tr>
+  </tbody>
+</table>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Device name</th>
+      <th style="text-align: center">IP</th>
+      <th style="text-align: right">Network ID</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Router 1</td>
+      <td style="text-align: center">127.0.0.16</td>
+      <td style="text-align: right">1</td>
+    </tr>
+    <tr>
+      <td>Host 1</td>
+      <td style="text-align: center">127.0.0.17</td>
+      <td style="text-align: right">1</td>
+    </tr>
+    <tr>
+      <td>Router 2</td>
+      <td style="text-align: center">127.0.0.32</td>
+      <td style="text-align: right">2</td>
+    </tr>
+    <tr>
+      <td>Router 3</td>
+      <td style="text-align: center">127.0.0.48</td>
+      <td style="text-align: right">3</td>
+    </tr>
+    <tr>
+      <td>Host 2</td>
+      <td style="text-align: center">127.0.0.49</td>
+      <td style="text-align: right">3</td>
+    </tr>
+  </tbody>
+</table>
