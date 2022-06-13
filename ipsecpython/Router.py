@@ -116,7 +116,7 @@ class Router:
         return ".".join(map(str, [i & m for i, m in zip(map(int, ip.split(".")),
                                                         map(int, mask.split(".")))]))
 
-    def find_network(self, dest_ip: str) -> tuple[str, int, bool]:
+    def find_network(self, dest_ip: str):
         """Returns way to move to given @dest_ip target
 
         Raises:

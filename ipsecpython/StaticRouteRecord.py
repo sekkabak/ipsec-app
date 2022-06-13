@@ -18,8 +18,8 @@ class StaticRouteRecord:
         return iter((self.network_ip, self.network_mask, self.next_hop, self.port))
 
     @classmethod
-    def fromtuple(cls, t: tuple[str, str, str, int]):
+    def fromtuple(cls, t):
         return cls(t[0], t[1], t[2], t[3])
 
-    def totuple(self) -> tuple[str, str, Socket]:
+    def totuple(self):
         return self.network_ip, self.network_mask, self.next_hop, self.port
