@@ -30,14 +30,14 @@ logger.setLevel(logging.DEBUG)
 class IKEService:
     __ike_port: int = 500
     __interface: str
-    __tunnels: list[Tunnel]
+    __tunnels: list
     __server_socket: socket.socket
     __sessions: dict
     __dh: DiffieHellman
     __find_network_f: function
     t_listener: threading.Thread
     
-    def __init__(self, interface: str, tunnels: list[Tunnel], find_network: function) -> None:
+    def __init__(self, interface: str, tunnels: list, find_network: function) -> None:
         logger.info(f"Initializing IKE")
         self.__interface = interface
         self.__tunnels = tunnels
