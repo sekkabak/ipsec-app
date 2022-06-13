@@ -29,8 +29,8 @@ class Router:
     __interface: str
     __listen_port: int
     __speaker_port: int
-    __static_routes_table: list[StaticRouteRecord]
-    __tunnels: list[Tunnel]
+    __static_routes_table: list
+    __tunnels: list
 
     __listener_queue: "Queue[bytes]"
     __speaker_queue: "Queue[tuple[Socket, bytes]]"
