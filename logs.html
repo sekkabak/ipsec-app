@@ -1,0 +1,23 @@
+<div class="container py-4 jumbotron top-5-percent">
+    <table onload="fill_my_data()">
+      <tr>
+        <td>My IP:</td>
+        <td id="my_ip">{{$route.meta.local_ip}}</td>
+      </tr>
+      <tr>
+        <td>My port:</td>
+        <td id="my_port">{{$route.meta.local_port}}</td>
+      </tr>
+      <tr>
+        <td>My gateway:</td>
+        <td id="my_gateway">{{$route.meta.gateway_ip}}</td>
+      </tr>
+    </table>
+    <p class="lead">Input router IP to download logs from it</p>
+    <input type="text" id="logs-ip" />
+    <button class="btn btn-secondary" id="logs-submit" onclick="do_logs()">
+      Show logs
+    </button>
+    <div id="logs-result"></div>
+  </div>
+  

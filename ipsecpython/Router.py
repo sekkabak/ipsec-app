@@ -1,10 +1,13 @@
 import os
+import sys
 import pickle
 import socket
 import threading
 import time
 import sys
 import errno
+import http.server
+import socketserver
 from multiprocessing import Process, Queue
 from typing import Optional
 
@@ -19,12 +22,13 @@ from StaticRouteRecord import StaticRouteRecord
 from Socket import Socket
 from Tunnel import Tunnel
 import readline
+from loguru import logger
+from httpserv import MyServer
 
 
-import logging
-logger = logging.getLogger("router")
-logger.setLevel(logging.DEBUG)
-
+file_log_path = 'logs/' + os.path.splitext(sys.argv[0])[0].split("/")[-1] + ".log"
+logger.remove()
+logger.add(sink=file_log_path, enqueue=True, backtrace=True, diagnose=True, level="INFO")
 conf.L3socket=L3RawSocket
 
 class Router:
@@ -54,10 +58,26 @@ class Router:
         self.__static_routes_table = []
         self.__tunnels = []
 
+        logger.info(f"Initializing Router")
+        logger.info(f"IP: {self.__interface}")
+        logger.info(f"IKE port: 500")
+        logger.info(f"listener port: {self.__listen_port}")
+        logger.info(f"sender port: {self.__speaker_port}")
+        logger.info(f"")
+
+
+        threading.Thread(target=self.run_logs_http, daemon=True).start()
+
         self.__ike = IKEService.IKEService(interface, self.__tunnels, self.find_network)
 
         self.__listener_queue = Queue()
         self.__speaker_queue = Queue()
+
+    def run_logs_http(self):
+        Handler = MyServer
+        Handler.file = file_log_path
+        with socketserver.TCPServer((self.__interface, 10500), Handler) as httpd:
+            httpd.serve_forever()
 
     def __check_sudo_permissions(self):
         if os.geteuid() != 0:
@@ -69,6 +89,7 @@ class Router:
         self.__listener_process.start()
 
     @staticmethod
+    @logger.catch
     def __listener_function(interface: str, listen_port: int, qq: "Queue[bytes]"):
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         server_socket.bind((interface, listen_port))
@@ -76,17 +97,18 @@ class Router:
         while True:
             time.sleep(0.05)
             message, address = server_socket.recvfrom(33000)
-            # message, address = server_socket.recvfrom(32848)
 
             qq.put(message)
             time.sleep(0.05)
 
+    @logger.catch
     def __start_speaker(self):
         self.__speaker_process = Process(target=self.__speaker_function,
                                          args=(self.__interface, self.__speaker_port, self.__speaker_queue))
         self.__speaker_process.start()
 
     @staticmethod
+    @logger.catch
     def __speaker_function(interface: str, speaker_port: int, qq: "Queue[tuple[Socket, bytes]]"):
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         server_socket.bind((interface, speaker_port))
@@ -97,6 +119,7 @@ class Router:
                 server_socket.sendto(data, address.totuple())
             time.sleep(0.05)
 
+    @logger.catch
     def send_TCP_packet(self, ip: str, data: bytes):
         dest_ip, port, is_hopping = self.find_network(ip)
         internet_packet = IP()
@@ -106,6 +129,7 @@ class Router:
         raw_data = data
         self.__speaker_queue.put((Socket(dest_ip, port), raw(internet_packet/tcp_packet/raw_data)))
 
+    @logger.catch
     def send_ICMP_packet(self, ip: str, data: bytes):
         dest_ip, port, is_hopping = self.find_network(ip)
         internet_packet = IP(src=self.__interface, dst=ip, ttl=20)
@@ -131,6 +155,7 @@ class Router:
                 return (ip, port)
         return None
 
+    @logger.catch
     def find_network(self, dest_ip: str):
         """Returns way to move to given @dest_ip target
 
@@ -171,6 +196,7 @@ class Router:
         """
         self.__static_routes_table.append(StaticRouteRecord(ip, mask, next_hop, port))
 
+    @logger.catch
     def __encrypt_package_TCP(self, sender: Socket, destination: Socket, message: bytes, tunnel: Tunnel) -> bytes:
         sa = SecurityAssociation(ESP, spi=tunnel.spi, crypt_algo=tunnel.crypt_algo, crypt_key=tunnel.crypt_key)
         p = IP(src=sender.ip, dst=destination.ip)
@@ -181,6 +207,7 @@ class Router:
         e /= Raw(sa.encrypt(p))
         return raw(e)
     
+    @logger.catch
     def __encrypt_package_UDP(self, sender: Socket, destination: Socket, message: bytes, tunnel: Tunnel) -> bytes:
         sa = SecurityAssociation(ESP, spi=tunnel.spi, crypt_algo=tunnel.crypt_algo, crypt_key=tunnel.crypt_key)
         p = IP(src=sender.ip, dst=destination.ip)
@@ -191,6 +218,7 @@ class Router:
         e /= Raw(sa.encrypt(p))
         return raw(e)
 
+    @logger.catch
     def __decrypt_packet(self, packet: bytes, tunnel: Tunnel):
         sa = SecurityAssociation(ESP, spi=tunnel.spi, crypt_algo=tunnel.crypt_algo, crypt_key=tunnel.crypt_key)
         return sa.decrypt(IP(packet))
@@ -218,6 +246,7 @@ class Router:
             counter += 1
         return layers
 
+    @logger.catch
     def __handle_ping(self, message: bytes):
         packet = IP(message)
         raw_data = raw(packet[Raw])
@@ -227,6 +256,7 @@ class Router:
         elif raw_data == b'pong':
             self.__ping_response = True
         
+    @logger.catch
     def __listen_loop_operation(self):
         while True:
             time.sleep(0.05)
@@ -281,8 +311,6 @@ class Router:
 
                         next_dst, port, is_hopping = self.find_network(decrypted_packet.dst)
                         self.__speaker_queue.put((Socket(next_dst, port), raw(decrypted_packet)))
-                    elif layers_names == ['UDP', 'Raw']: 
-                        pass
                 except:
                     import traceback
                     print(traceback.format_exc())
@@ -358,7 +386,8 @@ class Router:
                 print(f"Timeout")
         except IndexError:
             print("Destination host unreachable")
-        
+    
+    @logger.catch
     def __program_loop(self):
         try:
             while True:

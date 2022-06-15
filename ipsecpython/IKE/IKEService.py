@@ -1,4 +1,5 @@
 from __future__ import annotations
+from asyncio.log import logger
 from audioop import add
 
 import errno
@@ -20,13 +21,7 @@ from Tunnel import Tunnel
 from DiffieHellman import DiffieHellman, to_bytes
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-
-import sys
-
-import logging
-logger = logging.getLogger("ike")
-logger.setLevel(logging.DEBUG)
-
+from loguru import logger
 
 class IKEService:
     __ike_port: int = 500
@@ -40,6 +35,7 @@ class IKEService:
     
     def __init__(self, interface: str, tunnels: list, find_network: function) -> None:
         logger.info(f"Initializing IKE")
+        logger.info(f"")
         self.__interface = interface
         self.__tunnels = tunnels
         self.__sessions = dict()

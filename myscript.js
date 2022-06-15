@@ -11,6 +11,7 @@ async function main() {
   let chat = "";
   let ping = "";
   let update = "";
+  let logs = "";
 
   await fetch('home.html')
     .then(response => response.text())
@@ -28,6 +29,10 @@ async function main() {
     .then(response => response.text())
     .then(data => update = data);
 
+  await fetch('logs.html')
+    .then(response => response.text())
+    .then(data => logs = data);
+
   const url = apiUrl + "/info";
   await fetch(url)
     .then((response) => response.json())
@@ -42,6 +47,7 @@ async function main() {
     { path: '/chat', component: { template: chat }, meta: { local_ip, local_port, gateway_ip } },
     { path: '/ping', component: { template: ping }, meta: { local_ip, local_port, gateway_ip } },
     { path: '/update', component: { template: update }, meta: { local_ip, local_port, gateway_ip } },
+    { path: '/logs', component: { template: logs }, meta: { local_ip, local_port, gateway_ip } },
   ]
 
   const router = VueRouter.createRouter({
@@ -73,6 +79,16 @@ function do_update() {
     .then((response) => response.text())
     .then((text) => {
       document.getElementById("update-result").innerHTML = text;
+    });
+}
+
+function do_logs() {
+  const ip = document.getElementById("logs-ip").value;
+  const url = "http://" + ip + ":10500";
+  fetch(url)
+    .then((response) => response.text())
+    .then((text) => {
+      document.getElementById("logs-result").innerHTML = text.replace(/\n/g, "<br />");
     });
 }
 
