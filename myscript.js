@@ -1,5 +1,5 @@
 if (typeof apiUrl === "undefined") {
-  apiUrl = "http://192.168.94.128:5000"
+  apiUrl = "http://127.0.0.1:5000"
 }
 
 var local_ip;
@@ -109,8 +109,6 @@ function send_message() {
     }
     else {
       file = document.getElementById("fileone").files[0];
-      console.log('to moj plik:', file);
-
       let formData = new FormData();
       formData.append("file", file);
       fetch(apiUrl + "/send_file/"+document.getElementById("second_user").value, {

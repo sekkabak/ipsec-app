@@ -75,7 +75,9 @@ class Router:
 
         while True:
             time.sleep(0.05)
-            message, address = server_socket.recvfrom(32848)
+            message, address = server_socket.recvfrom(33000)
+            # message, address = server_socket.recvfrom(32848)
+
             qq.put(message)
             time.sleep(0.05)
 

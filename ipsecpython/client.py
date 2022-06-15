@@ -67,13 +67,13 @@ if __name__ == '__main__':
     try:
         # app.run(debug=True, port=5000)
 
-        # sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # sock.bind(('127.0.0.1', 5000))
-        # middleware_port = sock.getsockname()[1]
-        # sock.close()
-        middleware_port = 5000
-        print("http://" + '192.168.94.128' + ":" + str(middleware_port), flush=True)
-        http_server = WSGIServer(('192.168.94.128', middleware_port), app)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('127.0.0.1', 0))
+        middleware_port = sock.getsockname()[1]
+        sock.close()
+        # middleware_port = 5000
+        print("http://" + '127.0.0.1' + ":" + str(middleware_port), flush=True)
+        http_server = WSGIServer(('127.0.0.1', middleware_port), app)
         http_server.serve_forever()
     except KeyboardInterrupt:
         http_server.close()
