@@ -60,7 +60,7 @@ async function main() {
   app.mount('#app')
 }
 main()
-// var interval = window.setInterval(update_middleware, 2000);
+var interval = window.setInterval(update_middleware, 2000);
 
 function do_ping() {
   const ip = document.getElementById("ping-ip").value;
@@ -186,6 +186,9 @@ function update_middleware() {
         } else if(d.type == "mp3") {
           id = makeid(10)
           document.getElementById("chat-window-1").innerHTML += "<div class='my-message other-message'><span><input type='hidden' id='"+id+"' value='" + d.message + "'/><button onclick='playSound("+id+")'>Start</button><button onclick='stopSound()'>Stop</button></span></div>";
+        }
+        else {
+          document.getElementById("chat-window-1").innerHTML += "<div class='my-message other-message'><span>User sends unknown file.</span></div>";
         }
       })
     });

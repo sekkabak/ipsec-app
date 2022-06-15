@@ -56,47 +56,51 @@ class Host:
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         server_socket.bind((self.__interface, self.__listen_port))
 
-        while True:
-            message, address = server_socket.recvfrom(33000)
+        try:
+            while True:
+                message, address = server_socket.recvfrom(33000)
 
-            packet = IP(message)
-            layers = self.__scapy_get_layers(packet)
-            layers_names = [x.name for x in layers]
-            logger.error(f"Packet came with layers: {layers_names}")
-            
-            if layers_names == ['IP', 'ICMP', 'Raw']:
-                raw_data = raw(packet[Raw])
-                if raw_data == b'ping':
-                    logger.error(f"Sending pong packet to {packet.src}")
-                    self.send_ICMP_packet(packet.src, b'pong')
-                elif raw_data == b'pong':
-                    self.__ping_response = True
-                continue
-            else:
-                data = pickle.loads(packet[Raw].load)
-                try:
-                    if data["part"] == 0:
-                        self.tmp_file = data["data"]
-                    elif data["part"] == -1:
-                        self.tmp_file += data["data"]
-                        data = pickle.loads(self.tmp_file)
-
-                        if data[0:3] == b'ID3':
-                            print("Music file detected")
-                            self.messages_queue.append({"type":"mp3","message":base64.b64encode(data).decode('ascii')})
-                        else:
-                            print(f"adding file of len:{len(data)}")
-                            self.messages_queue.append({"type":"file","message":base64.b64encode(data).decode('ascii')})
-                    else:
-                        self.tmp_file += data["data"]
-                        print(f"adding part of the file", flush=True)
-                    continue
-                except Exception as e:
-                    # not file
-                    pass
+                packet = IP(message)
+                layers = self.__scapy_get_layers(packet)
+                layers_names = [x.name for x in layers]
+                logger.error(f"Packet came with layers: {layers_names}")
                 
-                self.messages_queue.append(json.loads(data))
-                sys.stdout.flush()    
+                if layers_names == ['IP', 'ICMP', 'Raw']:
+                    raw_data = raw(packet[Raw])
+                    if raw_data == b'ping':
+                        logger.error(f"Sending pong packet to {packet.src}")
+                        self.send_ICMP_packet(packet.src, b'pong')
+                    elif raw_data == b'pong':
+                        self.__ping_response = True
+                    continue
+                else:
+                    data = pickle.loads(packet[Raw].load)
+                    try:
+                        if data["part"] == 0:
+                            self.tmp_file = data["data"]
+                        elif data["part"] == -1:
+                            self.tmp_file += data["data"]
+                            data = pickle.loads(self.tmp_file)
+
+                            if data[0:3] == b'ID3':
+                                print("Music file detected")
+                                self.messages_queue.append({"type":"mp3","message":base64.b64encode(data).decode('ascii')})
+                            else:
+                                print(f"adding file of len:{len(data)}")
+                                self.messages_queue.append({"type":"file","message":base64.b64encode(data).decode('ascii')})
+                        else:
+                            self.tmp_file += data["data"]
+                            print(f"adding part of the file", flush=True)
+                        continue
+                    except Exception as e:
+                        # not file
+                        pass
+                    
+                    self.messages_queue.append(json.loads(data))
+                    sys.stdout.flush()
+        except Exception as e:
+            self.messages_queue.clear()
+            # ignore
 
     def __scapy_get_layers(self, packet):
         layers = []
