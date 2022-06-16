@@ -14,8 +14,13 @@ CORS(app)
 gateway_ip = '127.0.0.48'
 local_ip = '127.0.0.49'
 
-# gateway_ip = '127.0.0.16'
-# local_ip = '127.0.0.17'
+try:
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server_socket.bind((local_ip, 10000))
+    server_socket.close()
+except Exception:
+    gateway_ip = '127.0.0.16'
+    local_ip = '127.0.0.17'
 
 local_port = 10000
 host = Host(local_ip, local_port, Socket(gateway_ip, local_port))
