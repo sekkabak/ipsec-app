@@ -221,7 +221,12 @@ class Router:
     @logger.catch
     def __decrypt_packet(self, packet: bytes, tunnel: Tunnel):
         sa = SecurityAssociation(ESP, spi=tunnel.spi, crypt_algo=tunnel.crypt_algo, crypt_key=tunnel.crypt_key)
-        return sa.decrypt(IP(packet))
+        packet = sa.decrypt(IP(packet))
+        logger.info("")
+        logger.info(f"Decrypting ESP packet")
+        logger.info(f"Content of packet after decrypt: {bytes(packet)[:300]}")
+        logger.info("")
+        return packet
 
     def receive_estabilished_tunnel(self, tunnel: Tunnel):
         self.__tunnels.append(tunnel)
@@ -289,7 +294,10 @@ class Router:
                     elif packet.dst != self.__interface:
                         try:
                             next_dst, port, is_hopping = self.find_network(packet.dst)
+                            logger.info("")
                             logger.info(f"Forwarding packet from {packet.src} to {next_dst}")
+                            logger.info(f"Content of packet: {bytes(packet)[:300]}")
+                            logger.info("")
 
                             if 'ISAKMP' in layers_names:
                                 packet.dst = next_dst
@@ -302,7 +310,10 @@ class Router:
                         continue
                     
                     if layers_names == ['IP', 'ICMP', 'Raw']:
+                        logger.info("")
                         logger.info(f"Ping packet")
+                        logger.info(f"Content of packet: {bytes(packet)[:300]}")
+                        logger.info("")
                         self.__handle_ping(message)
                         continue
                     elif layers_names == ['IP', 'Raw']:
